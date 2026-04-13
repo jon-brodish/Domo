@@ -23,6 +23,17 @@ enum TaskRecurrencePreset: String, CaseIterable, Identifiable {
             return .every(days: 365)
         }
     }
+
+    static func from(_ rule: RecurrenceRule) -> TaskRecurrencePreset {
+        switch rule.intervalDays {
+        case 0: return .oneTime
+        case 30: return .monthly
+        case 90: return .quarterly
+        case 180: return .semiAnnual
+        case 365: return .yearly
+        default: return .quarterly
+        }
+    }
 }
 
 struct TaskEditorSheetView: View {

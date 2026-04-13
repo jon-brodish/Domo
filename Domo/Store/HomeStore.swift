@@ -7,14 +7,21 @@ final class HomeStore: ObservableObject {
     @Published var systems: [HomeSystem]
     @Published var tasks: [MaintenanceTask]
     @Published var selectedSystemID: UUID?
+    @Published private(set) var pendingCompletionIDs: Set<UUID> = []
 
     private let aiService: AISetupService
+    private var completionDelayTasks: [UUID: Task<Void, Never>] = [:]
+    private let completionDelayNanos: UInt64 = 1_000_000_000
 
     init(aiService: AISetupService) {
         self.aiService = aiService
         let seed = SampleDataFactory.seed()
         systems = seed.systems
         tasks = seed.tasks
+    }
+
+    deinit {
+        completionDelayTasks.values.forEach { $0.cancel() }
     }
 
     var overallHealthScore: Int {
@@ -77,27 +84,104 @@ final class HomeStore: ObservableObject {
     func toggleTaskCompletion(_ task: MaintenanceTask) {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
 
-        tasks[index].isCompleted.toggle()
-        tasks[index].completedDate = tasks[index].isCompleted ? .now : nil
+        if tasks[index].isCompleted {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                tasks[index].isCompleted = false
+                tasks[index].completedDate = nil
+            }
+            return
+        }
 
-        if tasks[index].isCompleted, tasks[index].recurrence.intervalDays > 0 {
+        if pendingCompletionIDs.contains(task.id) {
+            cancelPendingCompletion(for: task.id)
+            return
+        }
+
+        schedulePendingCompletion(for: task.id)
+    }
+
+    func isPendingCompletion(_ task: MaintenanceTask) -> Bool {
+        pendingCompletionIDs.contains(task.id)
+    }
+
+    private func schedulePendingCompletion(for taskID: UUID) {
+        completionDelayTasks[taskID]?.cancel()
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            pendingCompletionIDs.insert(taskID)
+        }
+
+        completionDelayTasks[taskID] = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: completionDelayNanos)
+            guard !Task.isCancelled else { return }
+            await self?.commitPendingCompletion(for: taskID)
+        }
+    }
+
+    private func cancelPendingCompletion(for taskID: UUID) {
+        completionDelayTasks[taskID]?.cancel()
+        completionDelayTasks[taskID] = nil
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            pendingCompletionIDs.remove(taskID)
+        }
+    }
+
+    private func commitPendingCompletion(for taskID: UUID) {
+        completionDelayTasks[taskID] = nil
+        defer {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                pendingCompletionIDs.remove(taskID)
+            }
+        }
+
+        guard let index = tasks.firstIndex(where: { $0.id == taskID }) else { return }
+        guard !tasks[index].isCompleted else { return }
+
+        withAnimation(.easeInOut(duration: 0.28)) {
+            tasks[index].isCompleted = true
+            tasks[index].completedDate = .now
+        }
+
+        if tasks[index].recurrence.intervalDays > 0 {
             let source = tasks[index]
             let next = MaintenanceTask(
                 title: source.title,
                 notes: source.notes,
-                dueDate: Calendar.current.date(byAdding: .day, value: source.recurrence.intervalDays, to: task.dueDate) ?? task.dueDate,
+                dueDate: Calendar.current.date(byAdding: .day, value: source.recurrence.intervalDays, to: source.dueDate) ?? source.dueDate,
                 recurrence: source.recurrence,
                 systemID: source.systemID,
                 priority: source.priority,
                 origin: source.origin
             )
-            tasks.append(next)
+            withAnimation(.easeInOut(duration: 0.28)) {
+                tasks.append(next)
+            }
         }
     }
 
     func addSystem(_ system: HomeSystem, tasks newTasks: [MaintenanceTask]) {
         systems.append(system)
         tasks.append(contentsOf: newTasks)
+    }
+
+    func deleteSystem(_ system: HomeSystem) {
+        let linkedTaskIDs = Set(tasks.filter { $0.systemID == system.id }.map(\.id))
+
+        for taskID in linkedTaskIDs {
+            completionDelayTasks[taskID]?.cancel()
+            completionDelayTasks[taskID] = nil
+        }
+
+        withAnimation(.easeInOut(duration: 0.24)) {
+            pendingCompletionIDs.subtract(linkedTaskIDs)
+            tasks.removeAll { $0.systemID == system.id }
+            systems.removeAll { $0.id == system.id }
+
+            if selectedSystemID == system.id {
+                selectedSystemID = nil
+            }
+        }
     }
 
     func addTask(
@@ -119,6 +203,37 @@ final class HomeStore: ObservableObject {
             origin: origin
         )
         tasks.append(task)
+    }
+
+    func deleteTask(_ task: MaintenanceTask) {
+        completionDelayTasks[task.id]?.cancel()
+        completionDelayTasks[task.id] = nil
+
+        withAnimation(.easeInOut(duration: 0.22)) {
+            pendingCompletionIDs.remove(task.id)
+            tasks.removeAll { $0.id == task.id }
+        }
+    }
+
+    func updateTask(
+        _ taskID: UUID,
+        title: String,
+        notes: String,
+        dueDate: Date,
+        recurrence: RecurrenceRule,
+        systemID: UUID?,
+        priority: TaskPriority
+    ) {
+        guard let index = tasks.firstIndex(where: { $0.id == taskID }) else { return }
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            tasks[index].title = title
+            tasks[index].notes = notes
+            tasks[index].dueDate = dueDate
+            tasks[index].recurrence = recurrence
+            tasks[index].systemID = systemID
+            tasks[index].priority = priority
+        }
     }
 
     func createFromAI(suggestion: AISetupSuggestion, installDate: Date?) {
