@@ -31,13 +31,22 @@ struct AddSystemFlowView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 18) {
                     Picker("Mode", selection: $mode) {
                         ForEach(AddFlowMode.allCases) { mode in
                             Text(mode.rawValue).tag(mode)
                         }
                     }
                     .pickerStyle(.segmented)
+                    .padding(4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.primary.opacity(0.06))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                    )
 
                     if mode == .manual {
                         manualForm
@@ -49,6 +58,8 @@ struct AddSystemFlowView: View {
                 .frame(maxWidth: 720)
                 .frame(maxWidth: .infinity, alignment: .center)
             }
+            .scrollIndicators(.hidden)
+            .background(AppTheme.background.ignoresSafeArea())
             .navigationTitle("Add Home Item")
 #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -63,6 +74,7 @@ struct AddSystemFlowView: View {
                 }
             }
         }
+        .animation(.easeInOut(duration: 0.22), value: mode)
 #if os(macOS)
         .frame(minWidth: 560, minHeight: 620)
 #else
@@ -72,25 +84,68 @@ struct AddSystemFlowView: View {
 
     private var manualForm: some View {
         SurfaceCard {
-            VStack(alignment: .leading, spacing: 12) {
-                TextField("Name", text: $name)
-                    .textFieldStyle(.roundedBorder)
-                TextField("Brand / Model", text: $brandModel)
-                    .textFieldStyle(.roundedBorder)
-                Picker("Category", selection: $category) {
-                    ForEach(HomeSystemCategory.allCases) { category in
-                        Text(category.rawValue).tag(category)
+            VStack(alignment: .leading, spacing: 16) {
+                sectionLabel("System")
+                inputField("Name", text: $name)
+                inputField("Brand / Model", text: $brandModel)
+
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Category")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+                    Picker("Category", selection: $category) {
+                        ForEach(HomeSystemCategory.allCases) { category in
+                            Text(category.rawValue).tag(category)
+                        }
                     }
+                    .pickerStyle(.menu)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.primary.opacity(0.05))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                    )
                 }
 
+                Divider()
+                    .overlay(Color.primary.opacity(0.08))
+
+                sectionLabel("Lifecycle")
                 Toggle("Known install date", isOn: $usesInstallDate)
+                    .toggleStyle(.switch)
                 if usesInstallDate {
                     DatePicker("Install Date", selection: $installDate, displayedComponents: .date)
+                        .datePickerStyle(.compact)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.primary.opacity(0.05))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                        )
                 }
 
-                TextField("Notes", text: $notes, axis: .vertical)
+                sectionLabel("Notes")
+                TextField("Anything important to remember?", text: $notes, axis: .vertical)
                     .lineLimit(3...5)
-                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.primary.opacity(0.05))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                    )
             }
         }
     }
@@ -98,7 +153,8 @@ struct AddSystemFlowView: View {
     private var aiForm: some View {
         VStack(alignment: .leading, spacing: 12) {
             SurfaceCard {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 14) {
+                    sectionLabel("AI Assist")
                     Text("Take or choose a photo, then review AI suggestions before saving.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -108,7 +164,16 @@ struct AddSystemFlowView: View {
                     }
 
                     TextField("Optional hint (e.g. HVAC in attic)", text: $aiHint)
-                        .textFieldStyle(.roundedBorder)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.primary.opacity(0.05))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                        )
 
                     Button {
                         Task { await runAI() }
@@ -163,6 +228,34 @@ struct AddSystemFlowView: View {
                 }
             }
         }
+    }
+
+    private func inputField(_ title: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+            TextField(title, text: text)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.primary.opacity(0.05))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                )
+        }
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+            .tracking(0.6)
     }
 
     private var canSave: Bool {

@@ -1,8 +1,12 @@
 import SwiftUI
 
 struct SystemDetailView: View {
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: HomeStore
     @State private var showingAddTask = false
+    @State private var showingDeleteConfirmation = false
+    @State private var pendingDeleteTask: MaintenanceTask?
+    @State private var selectedTask: MaintenanceTask?
     var system: HomeSystem
 
     var body: some View {
@@ -13,10 +17,20 @@ struct SystemDetailView: View {
                 tasksSection
                 notesSection
                 docsAndAI
+                deleteSection
             }
             .padding(20)
         }
         .navigationTitle(system.name)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(role: .destructive) {
+                    showingDeleteConfirmation = true
+                } label: {
+                    Label("Delete System", systemImage: "trash")
+                }
+            }
+        }
         .sheet(isPresented: $showingAddTask) {
             TaskEditorSheetView(
                 isPresented: $showingAddTask,
@@ -25,6 +39,48 @@ struct SystemDetailView: View {
             )
             .environmentObject(store)
         }
+        .sheet(item: $selectedTask) { task in
+            TaskDetailSheetView(task: task)
+                .environmentObject(store)
+        }
+        .alert(
+            "Delete System?",
+            isPresented: $showingDeleteConfirmation,
+            actions: {
+                Button("Delete", role: .destructive) {
+                    store.deleteSystem(system)
+                    dismiss()
+                }
+                Button("Cancel", role: .cancel) {}
+            },
+            message: {
+                Text("Delete \(system.name)? This also removes its linked tasks.")
+            }
+        )
+        .alert(
+            "Delete Task?",
+            isPresented: Binding(
+                get: { pendingDeleteTask != nil },
+                set: { isPresented in
+                    if !isPresented { pendingDeleteTask = nil }
+                }
+            ),
+            actions: {
+                Button("Delete", role: .destructive) {
+                    guard let task = pendingDeleteTask else { return }
+                    store.deleteTask(task)
+                    pendingDeleteTask = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingDeleteTask = nil
+                }
+            },
+            message: {
+                if let task = pendingDeleteTask {
+                    Text("Delete \(task.title)?")
+                }
+            }
+        )
     }
 
     private var header: some View {
@@ -86,8 +142,17 @@ struct SystemDetailView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(systemTasks) { task in
-                        TaskRowView(task: task, systemName: nil) {
+                        TaskRowView(task: task, systemName: nil, isPendingCompletion: store.isPendingCompletion(task)) {
                             store.toggleTaskCompletion(task)
+                        } onSelect: {
+                            selectedTask = task
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                pendingDeleteTask = task
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
                         }
                     }
                 }
@@ -122,6 +187,23 @@ struct SystemDetailView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+        }
+    }
+
+    private var deleteSection: some View {
+        SurfaceCard {
+            Button(role: .destructive) {
+                showingDeleteConfirmation = true
+            } label: {
+                HStack {
+                    Image(systemName: "trash")
+                    Text("Delete System")
+                    Spacer()
+                }
+                .font(.body.weight(.semibold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.red)
         }
     }
 

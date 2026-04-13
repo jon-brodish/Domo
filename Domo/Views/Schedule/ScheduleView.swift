@@ -9,7 +9,7 @@ struct ScheduleView: View {
                 SectionTitle(title: "Next 30 Days", subtitle: "A calm timeline of upcoming maintenance")
                 SurfaceCard {
                     ForEach(store.tasks.filter { !$0.isCompleted && $0.dueDate >= .now }.sorted { $0.dueDate < $1.dueDate }.prefix(10)) { task in
-                        TaskRowView(task: task, systemName: systemName(for: task)) {
+                        TaskRowView(task: task, systemName: systemName(for: task), isPendingCompletion: store.isPendingCompletion(task)) {
                             store.toggleTaskCompletion(task)
                         }
                     }

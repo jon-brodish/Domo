@@ -21,7 +21,7 @@ struct DashboardView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(store.dueSoonTasks.prefix(4)) { task in
-                            TaskRowView(task: task, systemName: systemName(for: task)) {
+                            TaskRowView(task: task, systemName: systemName(for: task), isPendingCompletion: store.isPendingCompletion(task)) {
                                 store.toggleTaskCompletion(task)
                             }
                         }
@@ -35,7 +35,7 @@ struct DashboardView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(store.overdueTasks.prefix(4)) { task in
-                            TaskRowView(task: task, systemName: systemName(for: task)) {
+                            TaskRowView(task: task, systemName: systemName(for: task), isPendingCompletion: store.isPendingCompletion(task)) {
                                 store.toggleTaskCompletion(task)
                             }
                         }

@@ -3,6 +3,8 @@ import SwiftUI
 struct TasksView: View {
     @EnvironmentObject private var store: HomeStore
     @State private var showingAddTask = false
+    @State private var pendingDeleteTask: MaintenanceTask?
+    @State private var selectedTask: MaintenanceTask?
 
     private var groupedTasks: [String: [MaintenanceTask]] {
         Dictionary(grouping: store.tasks.sorted { $0.dueDate < $1.dueDate }) { task in
@@ -18,8 +20,17 @@ struct TasksView: View {
                 if let items = groupedTasks[key], !items.isEmpty {
                     Section(key) {
                         ForEach(items) { task in
-                            TaskRowView(task: task, systemName: systemName(for: task)) {
+                            TaskRowView(task: task, systemName: systemName(for: task), isPendingCompletion: store.isPendingCompletion(task)) {
                                 store.toggleTaskCompletion(task)
+                            } onSelect: {
+                                selectedTask = task
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    pendingDeleteTask = task
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
                             }
                         }
                     }
@@ -41,6 +52,34 @@ struct TasksView: View {
             TaskEditorSheetView(isPresented: $showingAddTask)
                 .environmentObject(store)
         }
+        .sheet(item: $selectedTask) { task in
+            TaskDetailSheetView(task: task)
+                .environmentObject(store)
+        }
+        .alert(
+            "Delete Task?",
+            isPresented: Binding(
+                get: { pendingDeleteTask != nil },
+                set: { isPresented in
+                    if !isPresented { pendingDeleteTask = nil }
+                }
+            ),
+            actions: {
+                Button("Delete", role: .destructive) {
+                    guard let task = pendingDeleteTask else { return }
+                    store.deleteTask(task)
+                    pendingDeleteTask = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingDeleteTask = nil
+                }
+            },
+            message: {
+                if let task = pendingDeleteTask {
+                    Text("Delete \(task.title)?")
+                }
+            }
+        )
     }
 
     private func systemName(for task: MaintenanceTask) -> String? {
