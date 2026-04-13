@@ -23,6 +23,24 @@ const aiCallouts = [
   'No surprise auto-actions, your plan stays in your control'
 ]
 
+const costStats = [
+  {
+    value: '$13,954',
+    title: 'Avg water damage/freezing claim',
+    text: 'Insurance Information Institute data shows average severity from 2018 to 2022 at $13,954.'
+  },
+  {
+    value: '$350',
+    title: 'Average HVAC repair bill',
+    text: 'HomeAdvisor reports an average HVAC repair cost of $350 (costs vary by issue and location).'
+  },
+  {
+    value: '31%',
+    title: 'Dryer-fire ignition factor',
+    text: 'USFA reports failure to clean was the leading factor in home clothes dryer fires (2018-2020).'
+  }
+]
+
 const faqs = [
   {
     q: 'Does Domo replace contractors?',
@@ -50,22 +68,56 @@ export default function App() {
       </header>
 
       <section className="hero">
-        <p className="kicker">Home maintenance, simplified</p>
-        <h1>Stay ahead of repairs with one calm, modern dashboard.</h1>
-        <p>
-          Domo gives homeowners a clear plan to protect every major system, reduce surprise repairs,
-          and keep maintenance on schedule without the stress.
-        </p>
-        <div className="actions">
-          <button className="primary">Start Free</button>
-          <button className="secondary">See Demo</button>
+        <div className="hero-copy">
+          <p className="kicker">Home maintenance, simplified</p>
+          <h1>Stay ahead of repairs with one calm, modern dashboard.</h1>
+          <p>
+            Domo gives homeowners a clear plan to protect every major system, reduce surprise repairs,
+            and keep maintenance on schedule without the stress.
+          </p>
+          <div className="actions">
+            <button className="primary">Start Free</button>
+            <button className="secondary">See Demo</button>
+          </div>
         </div>
+        <aside className="hero-shot">
+          <img src="/assets/domo-hvac-screen.png" alt="Domo HVAC system detail screen on iPhone" />
+          <p>Live Domo system detail view with health score and recurring maintenance tasks.</p>
+        </aside>
       </section>
 
       <section className="stats">
         <div><strong>92%</strong><span>Tasks completed on time</span></div>
         <div><strong>6 min</strong><span>Average setup time</span></div>
         <div><strong>18k+</strong><span>Homes using Domo</span></div>
+      </section>
+
+      <section className="section cost-delay">
+        <div className="section-head">
+          <h2>The cost of waiting is real</h2>
+          <p>
+            Domo helps you stay ahead of preventable issues before they turn into high-ticket repairs,
+            emergency service calls, or major claim events.
+          </p>
+        </div>
+        <div className="cost-grid">
+          {costStats.map((item) => (
+            <article key={item.title} className="card cost-card">
+              <span className="metric">{item.value}</span>
+              <h3>{item.title}</h3>
+              <p>{item.text}</p>
+            </article>
+          ))}
+        </div>
+        <p className="cost-note">
+          Domo does not promise to prevent every breakdown. It helps you keep up with routine maintenance
+          that can reduce avoidable risk over time.
+        </p>
+        <div className="source-list">
+          <a href="https://www.iii.org/fact-statistic/facts-statistics-homeowners-and-renters-insurance" target="_blank" rel="noreferrer">III: Homeowners insurance stats</a>
+          <a href="https://www.homeadvisor.com/cost/heating-and-cooling/repair-an-hvac-system/" target="_blank" rel="noreferrer">HomeAdvisor: HVAC repair costs</a>
+          <a href="https://www.usfa.fema.gov/prevention/home-fires/prevent-fires/appliance-and-electrical/index.html" target="_blank" rel="noreferrer">USFA: Appliance and electrical fire safety</a>
+        </div>
       </section>
 
       <section className="section">
