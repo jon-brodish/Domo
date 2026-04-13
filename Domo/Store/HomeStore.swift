@@ -184,6 +184,28 @@ final class HomeStore: ObservableObject {
         }
     }
 
+    func updateSystem(
+        _ systemID: UUID,
+        name: String,
+        category: HomeSystemCategory,
+        brandModel: String,
+        installDate: Date?,
+        lastServiceDate: Date?,
+        notes: String
+    ) {
+        guard let index = systems.firstIndex(where: { $0.id == systemID }) else { return }
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            systems[index].name = name
+            systems[index].category = category
+            systems[index].brandModel = brandModel
+            systems[index].installDate = installDate
+            systems[index].lastServiceDate = lastServiceDate
+            systems[index].notes = notes
+            systems[index].photoSymbol = category.symbol
+        }
+    }
+
     func addTask(
         title: String,
         notes: String,

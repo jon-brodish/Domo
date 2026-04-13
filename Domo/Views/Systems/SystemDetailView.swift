@@ -4,10 +4,14 @@ struct SystemDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: HomeStore
     @State private var showingAddTask = false
+    @State private var showingEditSystem = false
     @State private var showingDeleteConfirmation = false
     @State private var pendingDeleteTask: MaintenanceTask?
     @State private var selectedTask: MaintenanceTask?
     var system: HomeSystem
+    private var displaySystem: HomeSystem {
+        store.systems.first(where: { $0.id == system.id }) ?? system
+    }
 
     var body: some View {
         ScrollView {
@@ -21,8 +25,15 @@ struct SystemDetailView: View {
             }
             .padding(20)
         }
-        .navigationTitle(system.name)
+        .navigationTitle(displaySystem.name)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showingEditSystem = true
+                } label: {
+                    Label("Edit System", systemImage: "pencil")
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button(role: .destructive) {
                     showingDeleteConfirmation = true
@@ -34,10 +45,14 @@ struct SystemDetailView: View {
         .sheet(isPresented: $showingAddTask) {
             TaskEditorSheetView(
                 isPresented: $showingAddTask,
-                preselectedSystemID: system.id,
+                preselectedSystemID: displaySystem.id,
                 lockSystemSelection: true
             )
             .environmentObject(store)
+        }
+        .sheet(isPresented: $showingEditSystem) {
+            SystemEditorSheetView(isPresented: $showingEditSystem, system: displaySystem)
+                .environmentObject(store)
         }
         .sheet(item: $selectedTask) { task in
             TaskDetailSheetView(task: task)
@@ -48,13 +63,13 @@ struct SystemDetailView: View {
             isPresented: $showingDeleteConfirmation,
             actions: {
                 Button("Delete", role: .destructive) {
-                    store.deleteSystem(system)
+                    store.deleteSystem(displaySystem)
                     dismiss()
                 }
                 Button("Cancel", role: .cancel) {}
             },
             message: {
-                Text("Delete \(system.name)? This also removes its linked tasks.")
+                Text("Delete \(displaySystem.name)? This also removes its linked tasks.")
             }
         )
         .alert(
@@ -86,18 +101,18 @@ struct SystemDetailView: View {
     private var header: some View {
         SurfaceCard {
             HStack(spacing: 16) {
-                Image(systemName: system.photoSymbol)
+                Image(systemName: displaySystem.photoSymbol)
                     .font(.system(size: 34, weight: .regular))
                     .frame(width: 74, height: 74)
                     .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(system.name)
+                    Text(displaySystem.name)
                         .font(.title2.weight(.semibold))
-                    Text(system.brandModel)
+                    Text(displaySystem.brandModel)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    Text(system.category.rawValue)
+                    Text(displaySystem.category.rawValue)
                         .font(.caption)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -106,7 +121,7 @@ struct SystemDetailView: View {
 
                 Spacer()
 
-                let health = store.healthSnapshot(for: system)
+                let health = store.healthSnapshot(for: displaySystem)
                 ScoreRingView(score: health.score, band: health.band, size: 82)
             }
         }
@@ -115,10 +130,10 @@ struct SystemDetailView: View {
     private var facts: some View {
         SurfaceCard {
             VStack(alignment: .leading, spacing: 10) {
-                KeyValueRow(label: "Install Date", value: system.installDate?.formatted(date: .abbreviated, time: .omitted) ?? "Unknown")
+                KeyValueRow(label: "Install Date", value: displaySystem.installDate?.formatted(date: .abbreviated, time: .omitted) ?? "Unknown")
                 KeyValueRow(label: "Age", value: ageText)
-                KeyValueRow(label: "Last Service", value: system.lastServiceDate?.formatted(date: .abbreviated, time: .omitted) ?? "Not yet logged")
-                KeyValueRow(label: "Next Maintenance", value: store.nextMaintenanceDate(for: system)?.formatted(date: .abbreviated, time: .omitted) ?? "No upcoming tasks")
+                KeyValueRow(label: "Last Service", value: displaySystem.lastServiceDate?.formatted(date: .abbreviated, time: .omitted) ?? "Not yet logged")
+                KeyValueRow(label: "Next Maintenance", value: store.nextMaintenanceDate(for: displaySystem)?.formatted(date: .abbreviated, time: .omitted) ?? "No upcoming tasks")
             }
         }
     }
@@ -136,7 +151,7 @@ struct SystemDetailView: View {
                 .buttonStyle(.bordered)
             }
             SurfaceCard {
-                let systemTasks = store.tasks(for: system)
+                let systemTasks = store.tasks(for: displaySystem)
                 if systemTasks.isEmpty {
                     Text("No tasks yet. Add recurring care to improve score confidence.")
                         .foregroundStyle(.secondary)
@@ -164,9 +179,9 @@ struct SystemDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             SectionTitle(title: "Notes")
             SurfaceCard {
-                Text(system.notes.isEmpty ? "No notes yet." : system.notes)
+                Text(displaySystem.notes.isEmpty ? "No notes yet." : displaySystem.notes)
                     .font(.body)
-                    .foregroundStyle(system.notes.isEmpty ? .secondary : .primary)
+                    .foregroundStyle(displaySystem.notes.isEmpty ? .secondary : .primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -208,11 +223,96 @@ struct SystemDetailView: View {
     }
 
     private var ageText: String {
-        guard let installDate = system.installDate,
+        guard let installDate = displaySystem.installDate,
               let years = Calendar.current.dateComponents([.year], from: installDate, to: .now).year else {
             return "Unknown"
         }
         return "\(years) years"
+    }
+}
+
+private struct SystemEditorSheetView: View {
+    @EnvironmentObject private var store: HomeStore
+    @Binding var isPresented: Bool
+    let system: HomeSystem
+
+    @State private var name: String
+    @State private var brandModel: String
+    @State private var category: HomeSystemCategory
+    @State private var installDate: Date
+    @State private var hasInstallDate: Bool
+    @State private var lastServiceDate: Date
+    @State private var hasLastServiceDate: Bool
+    @State private var notes: String
+
+    init(isPresented: Binding<Bool>, system: HomeSystem) {
+        _isPresented = isPresented
+        self.system = system
+        _name = State(initialValue: system.name)
+        _brandModel = State(initialValue: system.brandModel)
+        _category = State(initialValue: system.category)
+        _installDate = State(initialValue: system.installDate ?? .now)
+        _hasInstallDate = State(initialValue: system.installDate != nil)
+        _lastServiceDate = State(initialValue: system.lastServiceDate ?? .now)
+        _hasLastServiceDate = State(initialValue: system.lastServiceDate != nil)
+        _notes = State(initialValue: system.notes)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("System") {
+                    TextField("Name", text: $name)
+                    TextField("Brand / Model", text: $brandModel)
+                    Picker("Category", selection: $category) {
+                        ForEach(HomeSystemCategory.allCases) { item in
+                            Text(item.rawValue).tag(item)
+                        }
+                    }
+                }
+
+                Section("Dates") {
+                    Toggle("Known install date", isOn: $hasInstallDate)
+                    if hasInstallDate {
+                        DatePicker("Install Date", selection: $installDate, displayedComponents: .date)
+                    }
+
+                    Toggle("Last service logged", isOn: $hasLastServiceDate)
+                    if hasLastServiceDate {
+                        DatePicker("Last Service", selection: $lastServiceDate, displayedComponents: .date)
+                    }
+                }
+
+                Section("Notes") {
+                    TextField("Notes", text: $notes, axis: .vertical)
+                        .lineLimit(3...6)
+                }
+            }
+            .navigationTitle("Edit System")
+#if !os(macOS)
+            .navigationBarTitleDisplayMode(.inline)
+#endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { isPresented = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        store.updateSystem(
+                            system.id,
+                            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                            category: category,
+                            brandModel: brandModel.trimmingCharacters(in: .whitespacesAndNewlines),
+                            installDate: hasInstallDate ? installDate : nil,
+                            lastServiceDate: hasLastServiceDate ? lastServiceDate : nil,
+                            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines)
+                        )
+                        isPresented = false
+                    }
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
     }
 }
 
