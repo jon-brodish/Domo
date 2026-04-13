@@ -5,6 +5,11 @@ struct SystemDetailView: View {
     @EnvironmentObject private var store: HomeStore
     @State private var showingAddTask = false
     @State private var showingEditSystem = false
+    @State private var showingAIRecommendations = false
+    @State private var isLoadingAIRecommendations = false
+    @State private var aiSuggestion: AISetupSuggestion?
+    @State private var enabledAISuggestionIDs: Set<UUID> = []
+    @State private var aiErrorMessage: String?
     @State private var showingDeleteConfirmation = false
     @State private var pendingDeleteTask: MaintenanceTask?
     @State private var selectedTask: MaintenanceTask?
@@ -54,10 +59,38 @@ struct SystemDetailView: View {
             SystemEditorSheetView(isPresented: $showingEditSystem, system: displaySystem)
                 .environmentObject(store)
         }
+        .sheet(isPresented: $showingAIRecommendations) {
+            if let aiSuggestion {
+                AIRecommendationsSheetView(
+                    isPresented: $showingAIRecommendations,
+                    suggestion: aiSuggestion,
+                    selectedTaskIDs: $enabledAISuggestionIDs
+                ) {
+                    applyAISuggestions()
+                }
+            }
+        }
         .sheet(item: $selectedTask) { task in
             TaskDetailSheetView(task: task)
                 .environmentObject(store)
         }
+        .alert(
+            "AI Recommendations Unavailable",
+            isPresented: Binding(
+                get: { aiErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented { aiErrorMessage = nil }
+                }
+            ),
+            actions: {
+                Button("OK", role: .cancel) {
+                    aiErrorMessage = nil
+                }
+            },
+            message: {
+                Text(aiErrorMessage ?? "Please try again.")
+            }
+        )
         .alert(
             "Delete System?",
             isPresented: $showingDeleteConfirmation,
@@ -197,8 +230,17 @@ struct SystemDetailView: View {
                     Text("Use AI Setup to refine maintenance intervals based on model details and photo evidence.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    Button("Open AI Recommendations") {}
+                    Button {
+                        Task { await fetchAIRecommendations() }
+                    } label: {
+                        if isLoadingAIRecommendations {
+                            ProgressView()
+                        } else {
+                            Text("Open AI Recommendations")
+                        }
+                    }
                         .buttonStyle(.borderedProminent)
+                        .disabled(isLoadingAIRecommendations)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -228,6 +270,49 @@ struct SystemDetailView: View {
             return "Unknown"
         }
         return "\(years) years"
+    }
+
+    private func fetchAIRecommendations() async {
+        isLoadingAIRecommendations = true
+        defer { isLoadingAIRecommendations = false }
+
+        let hint = """
+        Existing system details:
+        Name: \(displaySystem.name)
+        Category: \(displaySystem.category.rawValue)
+        Brand model: \(displaySystem.brandModel)
+        Notes: \(displaySystem.notes)
+        """
+
+        do {
+            let suggestion = try await store.runAISetup(
+                input: AISetupInput(imageData: nil, userHint: hint)
+            )
+            aiSuggestion = suggestion
+            enabledAISuggestionIDs = Set(suggestion.tasks.map(\.id))
+            showingAIRecommendations = true
+        } catch {
+            aiErrorMessage = "Could not load recommendations. Please try again."
+        }
+    }
+
+    private func applyAISuggestions() {
+        guard let suggestion = aiSuggestion else { return }
+        let selected = suggestion.tasks.filter { enabledAISuggestionIDs.contains($0.id) }
+
+        for task in selected {
+            store.addTask(
+                title: task.title,
+                notes: task.notes,
+                dueDate: Calendar.current.date(byAdding: .day, value: task.recurrence.intervalDays, to: .now) ?? .now,
+                recurrence: task.recurrence,
+                systemID: displaySystem.id,
+                priority: task.priority,
+                origin: .suggested
+            )
+        }
+
+        showingAIRecommendations = false
     }
 }
 
@@ -310,6 +395,69 @@ private struct SystemEditorSheetView: View {
                         isPresented = false
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+}
+
+private struct AIRecommendationsSheetView: View {
+    @Binding var isPresented: Bool
+    let suggestion: AISetupSuggestion
+    @Binding var selectedTaskIDs: Set<UUID>
+    let onApply: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("AI Suggestion")
+                        .font(.headline)
+                    Text("\(Int(suggestion.confidence * 100))% confidence")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    KeyValueRow(label: "Name", value: suggestion.suggestedName)
+                    KeyValueRow(label: "Category", value: suggestion.category.rawValue)
+                    KeyValueRow(label: "Model", value: suggestion.brandModel)
+
+                    Divider()
+
+                    Text("Select tasks to add")
+                        .font(.subheadline.weight(.medium))
+
+                    ForEach(suggestion.tasks) { task in
+                        Toggle(isOn: Binding(
+                            get: { selectedTaskIDs.contains(task.id) },
+                            set: { isOn in
+                                if isOn { selectedTaskIDs.insert(task.id) }
+                                else { selectedTaskIDs.remove(task.id) }
+                            }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(task.title)
+                                Text(task.recurrence.summary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .padding(20)
+            }
+            .navigationTitle("AI Recommendations")
+#if !os(macOS)
+            .navigationBarTitleDisplayMode(.inline)
+#endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { isPresented = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add Selected") {
+                        onApply()
+                    }
+                    .disabled(selectedTaskIDs.isEmpty)
                 }
             }
         }
