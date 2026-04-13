@@ -12,7 +12,7 @@ enum AppSection: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .dashboard: return "Dashboard"
+        case .dashboard: return "Overview"
         case .systems: return "Systems"
         case .tasks: return "Tasks"
         case .schedule: return "Schedule"

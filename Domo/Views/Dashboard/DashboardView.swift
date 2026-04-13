@@ -56,7 +56,7 @@ struct DashboardView: View {
             }
             .padding(20)
         }
-        .navigationTitle("Dashboard")
+        .navigationTitle("Overview")
     }
 
     private var hero: some View {

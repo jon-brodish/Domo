@@ -16,7 +16,7 @@ struct AddSystemFlowView: View {
 
     @State private var name = ""
     @State private var brandModel = ""
-    @State private var category: HomeSystemCategory = .custom
+    @State private var category: HomeSystemCategory?
     @State private var installDate = Date()
     @State private var usesInstallDate = true
     @State private var notes = ""
@@ -95,8 +95,9 @@ struct AddSystemFlowView: View {
                         .foregroundStyle(.secondary)
                         .textCase(.uppercase)
                     Picker("Category", selection: $category) {
+                        Text("Select category").tag(Optional<HomeSystemCategory>.none)
                         ForEach(HomeSystemCategory.allCases) { category in
-                            Text(category.rawValue).tag(category)
+                            Text(category.rawValue).tag(Optional(category))
                         }
                     }
                     .pickerStyle(.menu)
@@ -261,7 +262,7 @@ struct AddSystemFlowView: View {
     private var canSave: Bool {
         switch mode {
         case .manual:
-            return !name.trimmingCharacters(in: .whitespaces).isEmpty
+            return !name.trimmingCharacters(in: .whitespaces).isEmpty && category != nil
         case .ai:
             return suggestion != nil
         }
@@ -285,6 +286,7 @@ struct AddSystemFlowView: View {
     private func save() {
         switch mode {
         case .manual:
+            guard let category else { return }
             let newSystem = HomeSystem(
                 name: name,
                 category: category,
