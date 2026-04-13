@@ -80,6 +80,9 @@ struct AddSystemFlowView: View {
 #else
         .presentationDetents([.large])
 #endif
+        .onChange(of: selectedItem) { _, item in
+            Task { await loadPhotoData(from: item) }
+        }
     }
 
     private var manualForm: some View {
@@ -162,6 +165,27 @@ struct AddSystemFlowView: View {
 
                     PhotosPicker(selection: $selectedItem, matching: .images) {
                         Label("Choose Appliance Photo", systemImage: "photo")
+                    }
+
+                    if selectedItem != nil {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                            Text(photoData == nil ? "Photo selected" : "Photo ready for analysis")
+                                .font(.subheadline.weight(.medium))
+                            Spacer()
+                            if let photoData {
+                                Text(ByteCountFormatter.string(fromByteCount: Int64(photoData.count), countStyle: .file))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.green.opacity(0.10))
+                        )
                     }
 
                     TextField("Optional hint (e.g. HVAC in attic)", text: $aiHint)
@@ -272,14 +296,26 @@ struct AddSystemFlowView: View {
         isAnalyzing = true
         defer { isAnalyzing = false }
 
-        if let selectedItem,
-           let data = try? await selectedItem.loadTransferable(type: Data.self) {
-            photoData = data
+        if photoData == nil {
+            await loadPhotoData(from: selectedItem)
         }
 
         if let result = try? await store.runAISetup(input: AISetupInput(imageData: photoData, userHint: aiHint)) {
             suggestion = result
             enabledSuggestions = Set(result.tasks.map(\.id))
+        }
+    }
+
+    private func loadPhotoData(from item: PhotosPickerItem?) async {
+        guard let item else {
+            photoData = nil
+            return
+        }
+
+        if let data = try? await item.loadTransferable(type: Data.self) {
+            photoData = data
+        } else {
+            photoData = nil
         }
     }
 
