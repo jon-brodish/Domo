@@ -2,6 +2,8 @@ import SwiftUI
 
 struct DashboardView: View {
     @EnvironmentObject private var store: HomeStore
+    @State private var showingAddSystem = false
+    @State private var showingAddTask = false
 
     var body: some View {
         ScrollView {
@@ -57,6 +59,33 @@ struct DashboardView: View {
             .padding(20)
         }
         .navigationTitle("Overview")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        showingAddSystem = true
+                    } label: {
+                        Label("System", systemImage: "house")
+                    }
+
+                    Button {
+                        showingAddTask = true
+                    } label: {
+                        Label("Task", systemImage: "checklist")
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                }
+            }
+        }
+        .sheet(isPresented: $showingAddSystem) {
+            AddSystemFlowView(isPresented: $showingAddSystem)
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showingAddTask) {
+            TaskEditorSheetView(isPresented: $showingAddTask)
+                .environmentObject(store)
+        }
     }
 
     private var hero: some View {

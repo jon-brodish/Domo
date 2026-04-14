@@ -1,5 +1,8 @@
 import PhotosUI
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 enum AddFlowMode: String, CaseIterable, Identifiable {
     case manual = "Manual"
@@ -12,7 +15,7 @@ struct AddSystemFlowView: View {
     @EnvironmentObject private var store: HomeStore
     @Binding var isPresented: Bool
 
-    @State private var mode: AddFlowMode = .manual
+    @State private var mode: AddFlowMode = .ai
 
     @State private var name = ""
     @State private var brandModel = ""
@@ -27,26 +30,16 @@ struct AddSystemFlowView: View {
     @State private var isAnalyzing = false
     @State private var suggestion: AISetupSuggestion?
     @State private var enabledSuggestions = Set<UUID>()
+    #if os(iOS)
+    @State private var showingCamera = false
+    @State private var cameraImage: UIImage?
+    #endif
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Picker("Mode", selection: $mode) {
-                        ForEach(AddFlowMode.allCases) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.primary.opacity(0.06))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color.white.opacity(0.45), lineWidth: 1)
-                    )
+                    modeSelector
 
                     if mode == .manual {
                         manualForm
@@ -83,6 +76,59 @@ struct AddSystemFlowView: View {
         .onChange(of: selectedItem) { _, item in
             Task { await loadPhotoData(from: item) }
         }
+        #if os(iOS)
+        .sheet(isPresented: $showingCamera) {
+            CameraImagePicker(image: $cameraImage)
+                .ignoresSafeArea()
+        }
+        .onChange(of: cameraImage) { _, image in
+            guard let image else { return }
+            selectedItem = nil
+            photoData = image.jpegData(compressionQuality: 0.9)
+        }
+        #endif
+    }
+
+    private var modeSelector: some View {
+        HStack(spacing: 10) {
+            modeOption(for: .ai)
+            modeOption(for: .manual)
+        }
+    }
+
+    private func modeOption(for flowMode: AddFlowMode) -> some View {
+        let isSelected = mode == flowMode
+        let symbol = flowMode == .ai ? "sparkles" : "square.and.pencil"
+        let subtitle = flowMode == .ai ? "Scan and prefill details" : "Enter everything yourself"
+
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                mode = flowMode
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: symbol)
+                        .font(.subheadline.weight(.semibold))
+                    Text(flowMode.rawValue)
+                        .font(.subheadline.weight(.semibold))
+                }
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(isSelected ? Color.primary.opacity(0.85) : .secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isSelected ? Color.blue.opacity(0.14) : Color.primary.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(isSelected ? Color.blue.opacity(0.5) : Color.white.opacity(0.45), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var manualForm: some View {
@@ -159,15 +205,39 @@ struct AddSystemFlowView: View {
             SurfaceCard {
                 VStack(alignment: .leading, spacing: 14) {
                     sectionLabel("AI Assist")
-                    Text("Take or choose a photo, then review AI suggestions before saving.")
+                    HStack(spacing: 8) {
+                        stepPill(number: 1, title: "Photo")
+                        stepPill(number: 2, title: "Review")
+                        stepPill(number: 3, title: "Save")
+                    }
+
+                    Text("Scan a system photo and we’ll draft the name, model, category, and starter tasks.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
-                    PhotosPicker(selection: $selectedItem, matching: .images) {
-                        Label("Choose Appliance Photo", systemImage: "photo")
+                    HStack(spacing: 10) {
+                        #if os(iOS)
+                        Button {
+                            showingCamera = true
+                        } label: {
+                            Label("Take Photo", systemImage: "camera.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 11)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        #endif
+
+                        PhotosPicker(selection: $selectedItem, matching: .images) {
+                            Label("Library", systemImage: "photo")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 11)
+                        }
+                        .buttonStyle(.bordered)
                     }
 
-                    if selectedItem != nil {
+                    if selectedItem != nil || photoData != nil {
                         HStack(spacing: 8) {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
@@ -203,32 +273,66 @@ struct AddSystemFlowView: View {
                     Button {
                         Task { await runAI() }
                     } label: {
-                        if isAnalyzing {
-                            ProgressView()
-                        } else {
-                            Label("Analyze with AI", systemImage: "sparkles")
+                        HStack {
+                            if isAnalyzing {
+                                ProgressView()
+                            } else {
+                                Label("Analyze with AI", systemImage: "sparkles")
+                                    .font(.headline.weight(.semibold))
+                            }
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(isAnalyzing)
+                    .disabled(isAnalyzing || (selectedItem == nil && photoData == nil))
                 }
             }
 
             if let suggestion {
                 SurfaceCard {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("AI Suggestion")
-                            .font(.headline)
-                        Text("\(Int(suggestion.confidence * 100))% confidence")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        HStack {
+                            Text("AI Suggestion")
+                                .font(.headline)
+                            Spacer()
+                            Text("\(Int(suggestion.confidence * 100))% confidence")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.blue)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.blue.opacity(0.12), in: Capsule())
+                        }
 
-                        KeyValueRow(label: "Name", value: suggestion.suggestedName)
-                        KeyValueRow(label: "Category", value: suggestion.category.rawValue)
-                        KeyValueRow(label: "Model", value: suggestion.brandModel)
+                        inputField("Name", text: suggestionNameBinding)
+
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text("Category")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                            Picker("Category", selection: suggestionCategoryBinding) {
+                                ForEach(HomeSystemCategory.allCases) { item in
+                                    Text(item.rawValue).tag(item)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.primary.opacity(0.05))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                            )
+                        }
+
+                        inputField("Model", text: suggestionModelBinding)
 
                         Divider()
-                        Text("Review suggested tasks before saving")
+                        Text("Review suggested tasks")
                             .font(.subheadline.weight(.medium))
 
                         ForEach(suggestion.tasks) { task in
@@ -253,6 +357,24 @@ struct AddSystemFlowView: View {
                 }
             }
         }
+    }
+
+    private func stepPill(number: Int, title: String) -> some View {
+        HStack(spacing: 6) {
+            Text("\(number)")
+                .font(.caption2.weight(.bold))
+                .frame(width: 16, height: 16)
+                .background(Circle().fill(Color.blue.opacity(0.18)))
+            Text(title)
+                .font(.caption.weight(.semibold))
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.primary.opacity(0.05))
+        )
     }
 
     private func inputField(_ title: String, text: Binding<String>) -> some View {
@@ -281,6 +403,27 @@ struct AddSystemFlowView: View {
             .foregroundStyle(.secondary)
             .textCase(.uppercase)
             .tracking(0.6)
+    }
+
+    private var suggestionNameBinding: Binding<String> {
+        Binding(
+            get: { suggestion?.suggestedName ?? "" },
+            set: { suggestion?.suggestedName = $0 }
+        )
+    }
+
+    private var suggestionModelBinding: Binding<String> {
+        Binding(
+            get: { suggestion?.brandModel ?? "" },
+            set: { suggestion?.brandModel = $0 }
+        )
+    }
+
+    private var suggestionCategoryBinding: Binding<HomeSystemCategory> {
+        Binding(
+            get: { suggestion?.category ?? .custom },
+            set: { suggestion?.category = $0 }
+        )
     }
 
     private var canSave: Bool {
@@ -368,6 +511,49 @@ struct AddSystemFlowView: View {
         isPresented = false
     }
 }
+
+#if os(iOS)
+private struct CameraImagePicker: UIViewControllerRepresentable {
+    @Binding var image: UIImage?
+    @Environment(\.dismiss) private var dismiss
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        picker.allowsEditing = false
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        var parent: CameraImagePicker
+
+        init(_ parent: CameraImagePicker) {
+            self.parent = parent
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            if let pickedImage = info[.originalImage] as? UIImage {
+                parent.image = pickedImage
+            }
+            parent.dismiss()
+        }
+    }
+}
+#endif
 
 #Preview {
     AddSystemFlowView(isPresented: .constant(true))

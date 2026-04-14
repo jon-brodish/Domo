@@ -140,11 +140,8 @@ struct SystemDetailView: View {
                     .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(displaySystem.name)
-                        .font(.title2.weight(.semibold))
                     Text(displaySystem.brandModel)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(.title3.weight(.semibold))
                     Text(displaySystem.category.rawValue)
                         .font(.caption)
                         .padding(.horizontal, 8)
@@ -155,7 +152,12 @@ struct SystemDetailView: View {
                 Spacer()
 
                 let health = store.healthSnapshot(for: displaySystem)
-                ScoreRingView(score: health.score, band: health.band, size: 82)
+                VStack(spacing: 6) {
+                    Text("Health")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    ScoreRingView(score: health.score, band: health.band, size: 82)
+                }
             }
         }
     }
@@ -179,9 +181,27 @@ struct SystemDetailView: View {
                 Button {
                     showingAddTask = true
                 } label: {
-                    Label("Add Task", systemImage: "plus")
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.blue)
+                            .frame(width: 20, height: 20)
+                            .background(
+                                Circle()
+                                    .fill(Color.blue.opacity(0.14))
+                            )
+                        Text("Add Task")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.blue)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Color(.secondarySystemBackground))
+                    )
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
             }
             SurfaceCard {
                 let systemTasks = store.tasks(for: displaySystem)

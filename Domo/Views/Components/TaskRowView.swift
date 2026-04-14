@@ -29,7 +29,6 @@ struct TaskRowView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(task.title)
                             .font(.body.weight(.medium))
-                            .strikethrough(showsCompletedState)
                         if let systemName {
                             Text(systemName)
                                 .font(.caption)

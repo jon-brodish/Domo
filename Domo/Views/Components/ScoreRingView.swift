@@ -18,13 +18,8 @@ struct ScoreRingView: View {
                 )
                 .rotationEffect(.degrees(-90))
 
-            VStack(spacing: 2) {
-                Text("\(score)")
-                    .font(.system(size: size * 0.28, weight: .semibold, design: .rounded))
-                Text("health")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
+            Text("\(score)")
+                .font(.system(size: size * 0.28, weight: .semibold, design: .rounded))
         }
         .frame(width: size, height: size)
         .accessibilityLabel("Health score \(score)")

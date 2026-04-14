@@ -10,18 +10,67 @@ final class HomeStore: ObservableObject {
     @Published private(set) var pendingCompletionIDs: Set<UUID> = []
 
     private let aiService: AISetupService
+    private let defaults: UserDefaults
+    private let persistenceKey = "home_store_snapshot_v1"
     private var completionDelayTasks: [UUID: Task<Void, Never>] = [:]
     private let completionDelayNanos: UInt64 = 1_000_000_000
+    private var cancellables: Set<AnyCancellable> = []
 
-    init(aiService: AISetupService) {
+    init(aiService: AISetupService, defaults: UserDefaults = .standard) {
         self.aiService = aiService
-        let seed = SampleDataFactory.seed()
-        systems = seed.systems
-        tasks = seed.tasks
+        self.defaults = defaults
+
+        if let snapshot = Self.loadSnapshot(from: defaults, key: persistenceKey) {
+            systems = snapshot.systems
+            tasks = snapshot.tasks
+        } else {
+            let seed = SampleDataFactory.seed()
+            systems = seed.systems
+            tasks = seed.tasks
+        }
+
+        observePersistence()
     }
 
     deinit {
         completionDelayTasks.values.forEach { $0.cancel() }
+    }
+
+    private func observePersistence() {
+        $systems
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.persistSnapshot()
+            }
+            .store(in: &cancellables)
+
+        $tasks
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.persistSnapshot()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func persistSnapshot() {
+        let snapshot = PersistedSnapshot(systems: systems, tasks: tasks)
+
+        do {
+            let data = try JSONEncoder().encode(snapshot)
+            defaults.set(data, forKey: persistenceKey)
+        } catch {
+            assertionFailure("Failed to persist HomeStore snapshot: \(error)")
+        }
+    }
+
+    private static func loadSnapshot(from defaults: UserDefaults, key: String) -> PersistedSnapshot? {
+        guard let data = defaults.data(forKey: key) else { return nil }
+
+        do {
+            return try JSONDecoder().decode(PersistedSnapshot.self, from: data)
+        } catch {
+            return nil
+        }
     }
 
     var overallHealthScore: Int {
@@ -291,6 +340,11 @@ final class HomeStore: ObservableObject {
 }
 
 struct SeedPayload {
+    var systems: [HomeSystem]
+    var tasks: [MaintenanceTask]
+}
+
+private struct PersistedSnapshot: Codable {
     var systems: [HomeSystem]
     var tasks: [MaintenanceTask]
 }
