@@ -2,34 +2,58 @@ import Foundation
 import SwiftUI
 import Combine
 
+struct WeeklyReviewGroup: Identifiable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let tasks: [MaintenanceTask]
+}
+
 @MainActor
 final class HomeStore: ObservableObject {
     @Published var systems: [HomeSystem]
     @Published var tasks: [MaintenanceTask]
+    @Published private(set) var impactEvents: [TaskImpactEvent]
+    @Published private(set) var healthHistory: [HealthTrendRecord]
     @Published var selectedSystemID: UUID?
     @Published private(set) var pendingCompletionIDs: Set<UUID> = []
 
     private let aiService: AISetupService
+    private let reminderScheduler: ReminderScheduling
     private let defaults: UserDefaults
     private let persistenceKey = "home_store_snapshot_v1"
     private var completionDelayTasks: [UUID: Task<Void, Never>] = [:]
     private let completionDelayNanos: UInt64 = 1_000_000_000
     private var cancellables: Set<AnyCancellable> = []
 
-    init(aiService: AISetupService, defaults: UserDefaults = .standard) {
+    init(
+        aiService: AISetupService,
+        reminderScheduler: ReminderScheduling? = nil,
+        defaults: UserDefaults = .standard
+    ) {
         self.aiService = aiService
+        self.reminderScheduler = reminderScheduler ?? UserNotificationReminderScheduler()
         self.defaults = defaults
 
         if let snapshot = Self.loadSnapshot(from: defaults, key: persistenceKey) {
             systems = snapshot.systems
             tasks = snapshot.tasks
+            impactEvents = snapshot.impactEvents
+            healthHistory = snapshot.healthHistory
         } else {
             let seed = SampleDataFactory.seed()
             systems = seed.systems
             tasks = seed.tasks
+            impactEvents = []
+            healthHistory = []
         }
 
         observePersistence()
+        recordDailyHealthSnapshotIfNeeded()
+        Task {
+            await self.reminderScheduler.requestAuthorizationIfNeeded()
+            await self.reminderScheduler.syncReminders(for: self.tasks, now: .now)
+        }
     }
 
     deinit {
@@ -41,6 +65,7 @@ final class HomeStore: ObservableObject {
             .dropFirst()
             .sink { [weak self] _ in
                 self?.persistSnapshot()
+                self?.recordDailyHealthSnapshotIfNeeded()
             }
             .store(in: &cancellables)
 
@@ -48,12 +73,67 @@ final class HomeStore: ObservableObject {
             .dropFirst()
             .sink { [weak self] _ in
                 self?.persistSnapshot()
+                self?.scheduleReminderSync()
+                self?.recordDailyHealthSnapshotIfNeeded()
+            }
+            .store(in: &cancellables)
+
+        $impactEvents
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.persistSnapshot()
+            }
+            .store(in: &cancellables)
+
+        $healthHistory
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.persistSnapshot()
             }
             .store(in: &cancellables)
     }
 
+    private func scheduleReminderSync() {
+        let taskSnapshot = tasks
+        Task {
+            await reminderScheduler.syncReminders(for: taskSnapshot, now: .now)
+        }
+    }
+
+    private func recordDailyHealthSnapshotIfNeeded() {
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: .now)
+        let score = overallHealthScore
+        let overdue = overdueTasks.count
+
+        if let index = healthHistory.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: day) }) {
+            healthHistory[index].score = score
+            healthHistory[index].overdueCount = overdue
+        } else {
+            healthHistory.append(HealthTrendRecord(date: day, score: score, overdueCount: overdue))
+            healthHistory.sort { $0.date < $1.date }
+        }
+
+        let cutoff = calendar.date(byAdding: .day, value: -370, to: day) ?? day
+        healthHistory.removeAll { $0.date < cutoff }
+    }
+
+    private func currencyRange(min: Double, max: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.maximumFractionDigits = 0
+        let minFormatted = formatter.string(from: NSNumber(value: min)) ?? "$0"
+        let maxFormatted = formatter.string(from: NSNumber(value: max)) ?? "$0"
+        return "\(minFormatted)-\(maxFormatted)"
+    }
+
     private func persistSnapshot() {
-        let snapshot = PersistedSnapshot(systems: systems, tasks: tasks)
+        let snapshot = PersistedSnapshot(
+            systems: systems,
+            tasks: tasks,
+            impactEvents: impactEvents,
+            healthHistory: healthHistory
+        )
 
         do {
             let data = try JSONEncoder().encode(snapshot)
@@ -102,6 +182,124 @@ final class HomeStore: ObservableObject {
             .map { $0 }
     }
 
+    var weeklyReviewGroups: [WeeklyReviewGroup] {
+        let activeTasks = tasks
+            .filter { !$0.isCompleted }
+            .sorted { $0.dueDate < $1.dueDate }
+
+        let urgentHighImpact = activeTasks.filter { task in
+            let isUrgent = task.dueDate < .now || task.dueDate <= Calendar.current.date(byAdding: .day, value: 3, to: .now) ?? .now
+            return isUrgent && task.priority == .high
+        }
+
+        let importantThisWeek = activeTasks.filter { task in
+            guard task.dueDate >= .now else { return false }
+            guard task.dueDate <= Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now else { return false }
+            return task.priority == .high || task.priority == .medium
+        }
+        .filter { task in
+            !urgentHighImpact.contains(task)
+        }
+
+        let keepOnRadar = activeTasks.filter { task in
+            task.dueDate <= Calendar.current.date(byAdding: .day, value: 14, to: .now) ?? .now
+        }
+        .filter { task in
+            !urgentHighImpact.contains(task) && !importantThisWeek.contains(task)
+        }
+
+        return [
+            WeeklyReviewGroup(
+                id: "urgent",
+                title: "Urgent + High Impact",
+                subtitle: "Handle first to avoid reliability misses",
+                tasks: urgentHighImpact
+            ),
+            WeeklyReviewGroup(
+                id: "week",
+                title: "Important This Week",
+                subtitle: "Keep momentum on near-term maintenance",
+                tasks: importantThisWeek
+            ),
+            WeeklyReviewGroup(
+                id: "radar",
+                title: "Keep On Radar",
+                subtitle: "Low-friction prep for what is next",
+                tasks: keepOnRadar
+            )
+        ]
+    }
+
+    var totalProjectedSavingsRange: String {
+        let min = impactEvents.reduce(0) { $0 + $1.estimatedSavingsMin }
+        let max = impactEvents.reduce(0) { $0 + $1.estimatedSavingsMax }
+        return currencyRange(min: min, max: max)
+    }
+
+    var currentMonthRecap: MonthlyRecap {
+        let calendar = Calendar.current
+        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: .now)) ?? .now
+
+        let monthlyEvents = impactEvents.filter { $0.completedAt >= monthStart }
+        let tasksCompleted = monthlyEvents.count
+        let projectedRiskReduced = monthlyEvents.reduce(0) { $0 + $1.avoidedRiskScore }
+        let projectedSavingsMin = monthlyEvents.reduce(0) { $0 + $1.estimatedSavingsMin }
+        let projectedSavingsMax = monthlyEvents.reduce(0) { $0 + $1.estimatedSavingsMax }
+
+        let monthHistory = healthHistory
+            .filter { $0.date >= monthStart }
+            .sorted { $0.date < $1.date }
+        let startingOverdue = monthHistory.first?.overdueCount ?? overdueTasks.count
+        let endingOverdue = monthHistory.last?.overdueCount ?? overdueTasks.count
+        let overdueReduced = max(0, startingOverdue - endingOverdue)
+
+        return MonthlyRecap(
+            tasksCompleted: tasksCompleted,
+            overdueReduced: overdueReduced,
+            projectedRiskReduced: projectedRiskReduced,
+            projectedSavingsMin: projectedSavingsMin,
+            projectedSavingsMax: projectedSavingsMax
+        )
+    }
+
+    func trendPoints(for period: TrendPeriod) -> [HealthTrendRecord] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        let start = calendar.date(byAdding: .day, value: -(period.days - 1), to: today) ?? today
+
+        let sortedHistory = healthHistory.sorted { $0.date < $1.date }
+        var byDay: [Date: HealthTrendRecord] = [:]
+        for entry in sortedHistory {
+            byDay[calendar.startOfDay(for: entry.date)] = entry
+        }
+
+        var points: [HealthTrendRecord] = []
+        var cursor = start
+        var lastKnown: HealthTrendRecord? = sortedHistory.last(where: { $0.date < start })
+
+        while cursor <= today {
+            if let exact = byDay[cursor] {
+                points.append(exact)
+                lastKnown = exact
+            } else {
+                let fallbackScore = lastKnown?.score ?? overallHealthScore
+                let fallbackOverdue = lastKnown?.overdueCount ?? overdueTasks.count
+                points.append(HealthTrendRecord(date: cursor, score: fallbackScore, overdueCount: fallbackOverdue))
+            }
+
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+
+        return points
+    }
+
+    func trendDelta(for period: TrendPeriod) -> Int {
+        let points = trendPoints(for: period)
+        guard let first = points.first, let last = points.last else { return 0 }
+        return last.score - first.score
+    }
+
     func tasks(for system: HomeSystem) -> [MaintenanceTask] {
         tasks
             .filter { $0.systemID == system.id }
@@ -138,6 +336,9 @@ final class HomeStore: ObservableObject {
                 tasks[index].isCompleted = false
                 tasks[index].completedDate = nil
             }
+            if let eventIndex = impactEvents.lastIndex(where: { $0.taskID == task.id }) {
+                impactEvents.remove(at: eventIndex)
+            }
             return
         }
 
@@ -161,9 +362,9 @@ final class HomeStore: ObservableObject {
         }
 
         completionDelayTasks[taskID] = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: completionDelayNanos)
+            try? await Task.sleep(nanoseconds: self?.completionDelayNanos ?? 0)
             guard !Task.isCancelled else { return }
-            await self?.commitPendingCompletion(for: taskID)
+            self?.commitPendingCompletion(for: taskID)
         }
     }
 
@@ -192,8 +393,21 @@ final class HomeStore: ObservableObject {
             tasks[index].completedDate = .now
         }
 
+        let completedTask = tasks[index]
+        let completedAt = completedTask.completedDate ?? .now
+        impactEvents.append(
+            TaskImpactEvent(
+                taskID: completedTask.id,
+                completedAt: completedAt,
+                avoidedRiskScore: completedTask.impactEstimate.avoidedRiskScore,
+                estimatedSavingsMin: completedTask.impactEstimate.estimatedSavingsMin,
+                estimatedSavingsMax: completedTask.impactEstimate.estimatedSavingsMax,
+                wasOverdue: completedTask.dueDate < completedAt
+            )
+        )
+
         if tasks[index].recurrence.intervalDays > 0 {
-            let source = tasks[index]
+            let source = completedTask
             let next = MaintenanceTask(
                 title: source.title,
                 notes: source.notes,
@@ -201,7 +415,8 @@ final class HomeStore: ObservableObject {
                 recurrence: source.recurrence,
                 systemID: source.systemID,
                 priority: source.priority,
-                origin: source.origin
+                origin: source.origin,
+                impactEstimate: source.impactEstimate
             )
             withAnimation(.easeInOut(duration: 0.28)) {
                 tasks.append(next)
@@ -262,6 +477,16 @@ final class HomeStore: ObservableObject {
         recurrence: RecurrenceRule,
         systemID: UUID?,
         priority: TaskPriority,
+        impactEstimate: TaskImpactEstimate = TaskImpactEstimate(
+            avoidedRiskScore: 20,
+            estimatedSavingsMin: 25,
+            estimatedSavingsMax: 80
+        ),
+        reminderSettings: TaskReminderSettings = TaskReminderSettings(
+            dueDateReminderEnabled: true,
+            explicitReminderDate: nil,
+            overdueCadence: .every3Days
+        ),
         origin: TaskOrigin = .userCreated
     ) {
         let task = MaintenanceTask(
@@ -271,7 +496,9 @@ final class HomeStore: ObservableObject {
             recurrence: recurrence,
             systemID: systemID,
             priority: priority,
-            origin: origin
+            origin: origin,
+            reminderSettings: reminderSettings,
+            impactEstimate: impactEstimate
         )
         tasks.append(task)
     }
@@ -293,7 +520,9 @@ final class HomeStore: ObservableObject {
         dueDate: Date,
         recurrence: RecurrenceRule,
         systemID: UUID?,
-        priority: TaskPriority
+        priority: TaskPriority,
+        reminderSettings: TaskReminderSettings,
+        impactEstimate: TaskImpactEstimate
     ) {
         guard let index = tasks.firstIndex(where: { $0.id == taskID }) else { return }
 
@@ -304,7 +533,38 @@ final class HomeStore: ObservableObject {
             tasks[index].recurrence = recurrence
             tasks[index].systemID = systemID
             tasks[index].priority = priority
+            tasks[index].reminderSettings = reminderSettings
+            tasks[index].impactEstimate = impactEstimate
         }
+    }
+
+    func snoozeTask(_ taskID: UUID, days: Int = 3) {
+        guard let index = tasks.firstIndex(where: { $0.id == taskID }) else { return }
+        guard !tasks[index].isCompleted else { return }
+        guard let nextDueDate = Calendar.current.date(byAdding: .day, value: days, to: tasks[index].dueDate) else { return }
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            tasks[index].dueDate = nextDueDate
+            tasks[index].reminderSettings.explicitReminderDate = nil
+        }
+    }
+
+    @discardableResult
+    func rescheduleAllOverdue(days: Int = 3) -> Int {
+        let overdueIndices = tasks.indices.filter { index in
+            !tasks[index].isCompleted && tasks[index].dueDate < .now
+        }
+        guard !overdueIndices.isEmpty else { return 0 }
+
+        let targetDate = Calendar.current.date(byAdding: .day, value: days, to: .now) ?? .now
+
+        withAnimation(.easeInOut(duration: 0.22)) {
+            for index in overdueIndices {
+                tasks[index].dueDate = targetDate
+                tasks[index].reminderSettings.explicitReminderDate = nil
+            }
+        }
+        return overdueIndices.count
     }
 
     func createFromAI(suggestion: AISetupSuggestion, installDate: Date?) {
@@ -347,6 +607,35 @@ struct SeedPayload {
 private struct PersistedSnapshot: Codable {
     var systems: [HomeSystem]
     var tasks: [MaintenanceTask]
+    var impactEvents: [TaskImpactEvent]
+    var healthHistory: [HealthTrendRecord]
+
+    init(
+        systems: [HomeSystem],
+        tasks: [MaintenanceTask],
+        impactEvents: [TaskImpactEvent],
+        healthHistory: [HealthTrendRecord]
+    ) {
+        self.systems = systems
+        self.tasks = tasks
+        self.impactEvents = impactEvents
+        self.healthHistory = healthHistory
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case systems
+        case tasks
+        case impactEvents
+        case healthHistory
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        systems = try container.decode([HomeSystem].self, forKey: .systems)
+        tasks = try container.decode([MaintenanceTask].self, forKey: .tasks)
+        impactEvents = try container.decodeIfPresent([TaskImpactEvent].self, forKey: .impactEvents) ?? []
+        healthHistory = try container.decodeIfPresent([HealthTrendRecord].self, forKey: .healthHistory) ?? []
+    }
 }
 
 enum SampleDataFactory {
