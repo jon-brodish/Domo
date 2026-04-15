@@ -12,6 +12,12 @@ struct TaskDetailSheetView: View {
     @State private var recurrence: TaskRecurrencePreset
     @State private var priority: TaskPriority
     @State private var relatedSystemID: UUID?
+    @State private var dueDateReminderEnabled: Bool
+    @State private var hasTimeBasedReminder: Bool
+    @State private var explicitReminderDate: Date
+    @State private var avoidedRiskScore: Double
+    @State private var estimatedSavingsMin: Double
+    @State private var estimatedSavingsMax: Double
     @State private var showingDeleteConfirmation = false
 
     init(task: MaintenanceTask) {
@@ -22,6 +28,12 @@ struct TaskDetailSheetView: View {
         _recurrence = State(initialValue: TaskRecurrencePreset.from(task.recurrence))
         _priority = State(initialValue: task.priority)
         _relatedSystemID = State(initialValue: task.systemID)
+        _dueDateReminderEnabled = State(initialValue: task.reminderSettings.dueDateReminderEnabled)
+        _hasTimeBasedReminder = State(initialValue: task.reminderSettings.explicitReminderDate != nil)
+        _explicitReminderDate = State(initialValue: task.reminderSettings.explicitReminderDate ?? task.dueDate)
+        _avoidedRiskScore = State(initialValue: Double(task.impactEstimate.avoidedRiskScore))
+        _estimatedSavingsMin = State(initialValue: task.impactEstimate.estimatedSavingsMin)
+        _estimatedSavingsMax = State(initialValue: task.impactEstimate.estimatedSavingsMax)
     }
 
     var body: some View {
@@ -40,6 +52,12 @@ struct TaskDetailSheetView: View {
                             Text(option.rawValue).tag(option)
                         }
                     }
+
+                    Toggle("Due-date reminder", isOn: $dueDateReminderEnabled)
+                    Toggle("Time-based reminder", isOn: $hasTimeBasedReminder)
+                    if hasTimeBasedReminder {
+                        DatePicker("Reminder Time", selection: $explicitReminderDate, displayedComponents: [.date, .hourAndMinute])
+                    }
                 }
 
                 Section("Details") {
@@ -57,7 +75,47 @@ struct TaskDetailSheetView: View {
                     }
                 }
 
+                Section("Outcome") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Avoided risk")
+                            Spacer()
+                            Text("\(Int(avoidedRiskScore))")
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: $avoidedRiskScore, in: 0...100, step: 5)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Estimated savings")
+                            .foregroundStyle(.secondary)
+                        HStack {
+                            TextField(
+                                "Min",
+                                value: $estimatedSavingsMin,
+                                format: .number.precision(.fractionLength(0))
+                            )
+                            .keyboardType(.numberPad)
+                            Text("-")
+                                .foregroundStyle(.secondary)
+                            TextField(
+                                "Max",
+                                value: $estimatedSavingsMax,
+                                format: .number.precision(.fractionLength(0))
+                            )
+                            .keyboardType(.numberPad)
+                        }
+                    }
+                }
+
                 Section("Actions") {
+                    Button {
+                        store.snoozeTask(taskID, days: 3)
+                    } label: {
+                        Label("Snooze 3 Days", systemImage: "zzz")
+                    }
+                    .disabled(currentTask?.isCompleted == true)
+
                     Button {
                         if let currentTask {
                             store.toggleTaskCompletion(currentTask)
@@ -91,7 +149,17 @@ struct TaskDetailSheetView: View {
                             dueDate: dueDate,
                             recurrence: recurrence.rule,
                             systemID: relatedSystemID,
-                            priority: priority
+                            priority: priority,
+                            reminderSettings: TaskReminderSettings(
+                                dueDateReminderEnabled: dueDateReminderEnabled,
+                                explicitReminderDate: hasTimeBasedReminder ? explicitReminderDate : nil,
+                                overdueCadence: .every3Days
+                            ),
+                            impactEstimate: TaskImpactEstimate(
+                                avoidedRiskScore: Int(avoidedRiskScore),
+                                estimatedSavingsMin: min(estimatedSavingsMin, estimatedSavingsMax),
+                                estimatedSavingsMax: max(estimatedSavingsMin, estimatedSavingsMax)
+                            )
                         )
                         dismiss()
                     }

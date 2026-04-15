@@ -16,7 +16,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .systems: return "Systems"
         case .tasks: return "Tasks"
         case .schedule: return "Schedule"
-        case .insights: return "Insights"
+        case .insights: return "Review"
         case .settings: return "Settings"
         }
     }
@@ -27,7 +27,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .systems: return "house"
         case .tasks: return "checklist"
         case .schedule: return "calendar"
-        case .insights: return "waveform.path.ecg"
+        case .insights: return "checkmark.seal"
         case .settings: return "gearshape"
         }
     }

@@ -32,6 +32,16 @@ struct TasksView: View {
                                     Label("Delete", systemImage: "trash")
                                 }
                             }
+                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                if !task.isCompleted {
+                                    Button {
+                                        store.snoozeTask(task.id, days: 3)
+                                    } label: {
+                                        Label("Snooze 3 Days", systemImage: "zzz")
+                                    }
+                                    .tint(.indigo)
+                                }
+                            }
                         }
                     }
                 }
@@ -40,6 +50,13 @@ struct TasksView: View {
         .listStyle(.automatic)
         .navigationTitle("Tasks")
         .toolbar {
+            if !store.overdueTasks.isEmpty {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Reschedule Overdue") {
+                        _ = store.rescheduleAllOverdue(days: 3)
+                    }
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     showingAddTask = true
