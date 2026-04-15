@@ -35,6 +35,7 @@ struct HomeSystem: Identifiable, Codable, Hashable {
     var installDate: Date?
     var lastServiceDate: Date?
     var notes: String
+    var warrantyExpirationDate: Date?
     var photoSymbol: String
     var documentPlaceholder: String
     var createdFromAI: Bool
@@ -47,6 +48,7 @@ struct HomeSystem: Identifiable, Codable, Hashable {
         installDate: Date? = nil,
         lastServiceDate: Date? = nil,
         notes: String = "",
+        warrantyExpirationDate: Date? = nil,
         photoSymbol: String,
         documentPlaceholder: String = "Manual.pdf",
         createdFromAI: Bool = false
@@ -58,8 +60,38 @@ struct HomeSystem: Identifiable, Codable, Hashable {
         self.installDate = installDate
         self.lastServiceDate = lastServiceDate
         self.notes = notes
+        self.warrantyExpirationDate = warrantyExpirationDate
         self.photoSymbol = photoSymbol
         self.documentPlaceholder = documentPlaceholder
         self.createdFromAI = createdFromAI
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case category
+        case brandModel
+        case installDate
+        case lastServiceDate
+        case notes
+        case warrantyExpirationDate
+        case photoSymbol
+        case documentPlaceholder
+        case createdFromAI
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        category = try container.decode(HomeSystemCategory.self, forKey: .category)
+        brandModel = try container.decode(String.self, forKey: .brandModel)
+        installDate = try container.decodeIfPresent(Date.self, forKey: .installDate)
+        lastServiceDate = try container.decodeIfPresent(Date.self, forKey: .lastServiceDate)
+        notes = try container.decode(String.self, forKey: .notes)
+        warrantyExpirationDate = try container.decodeIfPresent(Date.self, forKey: .warrantyExpirationDate)
+        photoSymbol = try container.decode(String.self, forKey: .photoSymbol)
+        documentPlaceholder = try container.decodeIfPresent(String.self, forKey: .documentPlaceholder) ?? "Manual.pdf"
+        createdFromAI = try container.decodeIfPresent(Bool.self, forKey: .createdFromAI) ?? false
     }
 }

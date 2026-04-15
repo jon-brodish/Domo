@@ -37,6 +37,33 @@ struct InsightsView: View {
                 .padding(.vertical, 4)
             }
 
+            Section("Warranty Expiring Soon") {
+                if store.warrantyExpiringSoon.isEmpty && store.warrantyExpired.isEmpty {
+                    Text("No upcoming warranty expirations.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(store.warrantyExpired) { system in
+                        HStack {
+                            Text(system.name)
+                            Spacer()
+                            Text("Expired")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.red)
+                        }
+                    }
+
+                    ForEach(store.warrantyExpiringSoon) { system in
+                        HStack {
+                            Text(system.name)
+                            Spacer()
+                            Text(system.warrantyExpirationDate?.formatted(date: .abbreviated, time: .omitted) ?? "")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
             ForEach(store.weeklyReviewGroups) { group in
                 if !group.tasks.isEmpty {
                     Section {

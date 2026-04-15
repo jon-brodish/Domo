@@ -18,6 +18,7 @@ struct TaskDetailSheetView: View {
     @State private var avoidedRiskScore: Double
     @State private var estimatedSavingsMin: Double
     @State private var estimatedSavingsMax: Double
+    @State private var showingAddDocument = false
     @State private var showingDeleteConfirmation = false
 
     init(task: MaintenanceTask) {
@@ -108,6 +109,32 @@ struct TaskDetailSheetView: View {
                     }
                 }
 
+                Section("Document Vault") {
+                    let relatedDocs = store.documents(forTask: taskID)
+
+                    if relatedDocs.isEmpty {
+                        Text("No documents attached.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(relatedDocs) { document in
+                            HStack {
+                                Label(document.title, systemImage: document.type.symbol)
+                                Spacer()
+                                Button(role: .destructive) {
+                                    store.deleteDocument(document.id)
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+
+                    Button("Add Document") {
+                        showingAddDocument = true
+                    }
+                }
+
                 Section("Actions") {
                     Button {
                         store.snoozeTask(taskID, days: 3)
@@ -186,6 +213,14 @@ struct TaskDetailSheetView: View {
 #if os(iOS)
         .presentationDetents([.medium, .large])
 #endif
+        .sheet(isPresented: $showingAddDocument) {
+            DocumentEditorSheetView(
+                isPresented: $showingAddDocument,
+                prefilledSystemID: relatedSystemID,
+                prefilledTaskID: taskID
+            )
+            .environmentObject(store)
+        }
     }
 
     private var currentTask: MaintenanceTask? {

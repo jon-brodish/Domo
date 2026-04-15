@@ -211,6 +211,69 @@ struct DomoTests {
         #expect(store.trendPoints(for: .days30).count == 30)
         #expect(store.trendPoints(for: .days90).count == 90)
     }
+
+    @Test @MainActor
+    func addDocumentLinksToSystemAndTask() async {
+        let suiteName = "DomoTests-Docs-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let store = HomeStore(
+            aiService: MockAISetupService(),
+            reminderScheduler: TestReminderScheduler(),
+            defaults: defaults
+        )
+
+        let systemID = UUID()
+        let taskID = UUID()
+        store.addDocument(
+            title: "Furnace Manual",
+            type: .manual,
+            notes: "PDF",
+            systemID: systemID,
+            taskID: taskID
+        )
+
+        #expect(store.documents(for: systemID).count == 1)
+        #expect(store.documents(forTask: taskID).count == 1)
+    }
+
+    @Test @MainActor
+    func warrantyFiltersSeparateExpiringAndExpired() async {
+        let suiteName = "DomoTests-Warranty-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let store = HomeStore(
+            aiService: MockAISetupService(),
+            reminderScheduler: TestReminderScheduler(),
+            defaults: defaults
+        )
+        store.tasks = []
+        store.systems = [
+            HomeSystem(
+                name: "Heat Pump",
+                category: .hvac,
+                brandModel: "A",
+                installDate: nil,
+                lastServiceDate: nil,
+                notes: "",
+                warrantyExpirationDate: Date().addingTimeInterval(20 * 86_400),
+                photoSymbol: "wind"
+            ),
+            HomeSystem(
+                name: "Water Heater",
+                category: .water,
+                brandModel: "B",
+                installDate: nil,
+                lastServiceDate: nil,
+                notes: "",
+                warrantyExpirationDate: Date().addingTimeInterval(-5 * 86_400),
+                photoSymbol: "drop"
+            )
+        ]
+
+        #expect(store.warrantyExpiringSoon.map(\.name) == ["Heat Pump"])
+        #expect(store.warrantyExpired.map(\.name) == ["Water Heater"])
+    }
 }
 
 private struct TestReminderScheduler: ReminderScheduling {

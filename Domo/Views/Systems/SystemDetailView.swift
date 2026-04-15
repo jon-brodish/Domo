@@ -11,6 +11,7 @@ struct SystemDetailView: View {
     @State private var enabledAISuggestionIDs: Set<UUID> = []
     @State private var aiErrorMessage: String?
     @State private var showingDeleteConfirmation = false
+    @State private var showingAddDocument = false
     @State private var pendingDeleteTask: MaintenanceTask?
     @State private var selectedTask: MaintenanceTask?
     var system: HomeSystem
@@ -58,6 +59,14 @@ struct SystemDetailView: View {
         .sheet(isPresented: $showingEditSystem) {
             SystemEditorSheetView(isPresented: $showingEditSystem, system: displaySystem)
                 .environmentObject(store)
+        }
+        .sheet(isPresented: $showingAddDocument) {
+            DocumentEditorSheetView(
+                isPresented: $showingAddDocument,
+                prefilledSystemID: displaySystem.id,
+                prefilledTaskID: nil
+            )
+            .environmentObject(store)
         }
         .sheet(isPresented: $showingAIRecommendations) {
             if let aiSuggestion {
@@ -168,6 +177,7 @@ struct SystemDetailView: View {
                 KeyValueRow(label: "Install Date", value: displaySystem.installDate?.formatted(date: .abbreviated, time: .omitted) ?? "Unknown")
                 KeyValueRow(label: "Age", value: ageText)
                 KeyValueRow(label: "Last Service", value: displaySystem.lastServiceDate?.formatted(date: .abbreviated, time: .omitted) ?? "Not yet logged")
+                KeyValueRow(label: "Warranty", value: warrantyText)
                 KeyValueRow(label: "Next Maintenance", value: store.nextMaintenanceDate(for: displaySystem)?.formatted(date: .abbreviated, time: .omitted) ?? "No upcoming tasks")
             }
         }
@@ -242,11 +252,39 @@ struct SystemDetailView: View {
 
     private var docsAndAI: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionTitle(title: "Documents & AI")
+            SectionTitle(title: "Document Vault & AI")
             SurfaceCard {
                 VStack(alignment: .leading, spacing: 12) {
-                    Label(system.documentPlaceholder, systemImage: "doc.text")
-                        .font(.subheadline)
+                    HStack {
+                        Text("Attached documents")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Button("Add") {
+                            showingAddDocument = true
+                        }
+                    }
+
+                    let attachedDocs = store.documents(for: displaySystem.id)
+                    if attachedDocs.isEmpty {
+                        Label("No documents yet", systemImage: "doc")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(attachedDocs) { document in
+                            HStack {
+                                Label(document.title, systemImage: document.type.symbol)
+                                    .font(.subheadline)
+                                Spacer()
+                                Button(role: .destructive) {
+                                    store.deleteDocument(document.id)
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+
                     Text("Use AI Setup to refine maintenance intervals based on model details and photo evidence.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -290,6 +328,14 @@ struct SystemDetailView: View {
             return "Unknown"
         }
         return "\(years) years"
+    }
+
+    private var warrantyText: String {
+        guard let expiration = displaySystem.warrantyExpirationDate else { return "Not set" }
+        if expiration < .now {
+            return "Expired \(expiration.formatted(date: .abbreviated, time: .omitted))"
+        }
+        return expiration.formatted(date: .abbreviated, time: .omitted)
     }
 
     private func fetchAIRecommendations() async {
@@ -349,6 +395,8 @@ private struct SystemEditorSheetView: View {
     @State private var lastServiceDate: Date
     @State private var hasLastServiceDate: Bool
     @State private var notes: String
+    @State private var hasWarrantyExpirationDate: Bool
+    @State private var warrantyExpirationDate: Date
 
     init(isPresented: Binding<Bool>, system: HomeSystem) {
         _isPresented = isPresented
@@ -361,6 +409,8 @@ private struct SystemEditorSheetView: View {
         _lastServiceDate = State(initialValue: system.lastServiceDate ?? .now)
         _hasLastServiceDate = State(initialValue: system.lastServiceDate != nil)
         _notes = State(initialValue: system.notes)
+        _hasWarrantyExpirationDate = State(initialValue: system.warrantyExpirationDate != nil)
+        _warrantyExpirationDate = State(initialValue: system.warrantyExpirationDate ?? .now)
     }
 
     var body: some View {
@@ -386,6 +436,11 @@ private struct SystemEditorSheetView: View {
                     if hasLastServiceDate {
                         DatePicker("Last Service", selection: $lastServiceDate, displayedComponents: .date)
                     }
+
+                    Toggle("Warranty expiration known", isOn: $hasWarrantyExpirationDate)
+                    if hasWarrantyExpirationDate {
+                        DatePicker("Warranty Expires", selection: $warrantyExpirationDate, displayedComponents: .date)
+                    }
                 }
 
                 Section("Notes") {
@@ -410,6 +465,7 @@ private struct SystemEditorSheetView: View {
                             brandModel: brandModel.trimmingCharacters(in: .whitespacesAndNewlines),
                             installDate: hasInstallDate ? installDate : nil,
                             lastServiceDate: hasLastServiceDate ? lastServiceDate : nil,
+                            warrantyExpirationDate: hasWarrantyExpirationDate ? warrantyExpirationDate : nil,
                             notes: notes.trimmingCharacters(in: .whitespacesAndNewlines)
                         )
                         isPresented = false
