@@ -13,6 +13,7 @@ struct WeeklyReviewGroup: Identifiable {
 final class HomeStore: ObservableObject {
     @Published var systems: [HomeSystem]
     @Published var tasks: [MaintenanceTask]
+    @Published var documents: [VaultDocument]
     @Published private(set) var impactEvents: [TaskImpactEvent]
     @Published private(set) var healthHistory: [HealthTrendRecord]
     @Published var selectedSystemID: UUID?
@@ -38,12 +39,14 @@ final class HomeStore: ObservableObject {
         if let snapshot = Self.loadSnapshot(from: defaults, key: persistenceKey) {
             systems = snapshot.systems
             tasks = snapshot.tasks
+            documents = snapshot.documents
             impactEvents = snapshot.impactEvents
             healthHistory = snapshot.healthHistory
         } else {
             let seed = SampleDataFactory.seed()
             systems = seed.systems
             tasks = seed.tasks
+            documents = []
             impactEvents = []
             healthHistory = []
         }
@@ -75,6 +78,13 @@ final class HomeStore: ObservableObject {
                 self?.persistSnapshot()
                 self?.scheduleReminderSync()
                 self?.recordDailyHealthSnapshotIfNeeded()
+            }
+            .store(in: &cancellables)
+
+        $documents
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.persistSnapshot()
             }
             .store(in: &cancellables)
 
@@ -131,6 +141,7 @@ final class HomeStore: ObservableObject {
         let snapshot = PersistedSnapshot(
             systems: systems,
             tasks: tasks,
+            documents: documents,
             impactEvents: impactEvents,
             healthHistory: healthHistory
         )
@@ -180,6 +191,41 @@ final class HomeStore: ObservableObject {
             .sorted { ($0.completedDate ?? .distantPast) > ($1.completedDate ?? .distantPast) }
             .prefix(5)
             .map { $0 }
+    }
+
+    var warrantyExpiringSoon: [HomeSystem] {
+        let upperBound = Calendar.current.date(byAdding: .day, value: 45, to: .now) ?? .now
+        return systems
+            .filter {
+                guard let expiration = $0.warrantyExpirationDate else { return false }
+                return expiration >= .now && expiration <= upperBound
+            }
+            .sorted {
+                ($0.warrantyExpirationDate ?? .distantFuture) < ($1.warrantyExpirationDate ?? .distantFuture)
+            }
+    }
+
+    var warrantyExpired: [HomeSystem] {
+        systems
+            .filter {
+                guard let expiration = $0.warrantyExpirationDate else { return false }
+                return expiration < .now
+            }
+            .sorted {
+                ($0.warrantyExpirationDate ?? .distantFuture) < ($1.warrantyExpirationDate ?? .distantFuture)
+            }
+    }
+
+    func documents(for systemID: UUID) -> [VaultDocument] {
+        documents
+            .filter { $0.systemID == systemID }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    func documents(forTask taskID: UUID) -> [VaultDocument] {
+        documents
+            .filter { $0.taskID == taskID }
+            .sorted { $0.createdAt > $1.createdAt }
     }
 
     var weeklyReviewGroups: [WeeklyReviewGroup] {
@@ -439,6 +485,13 @@ final class HomeStore: ObservableObject {
 
         withAnimation(.easeInOut(duration: 0.24)) {
             pendingCompletionIDs.subtract(linkedTaskIDs)
+            documents.removeAll { document in
+                if document.systemID == system.id { return true }
+                if let taskID = document.taskID {
+                    return linkedTaskIDs.contains(taskID)
+                }
+                return false
+            }
             tasks.removeAll { $0.systemID == system.id }
             systems.removeAll { $0.id == system.id }
 
@@ -455,6 +508,7 @@ final class HomeStore: ObservableObject {
         brandModel: String,
         installDate: Date?,
         lastServiceDate: Date?,
+        warrantyExpirationDate: Date?,
         notes: String
     ) {
         guard let index = systems.firstIndex(where: { $0.id == systemID }) else { return }
@@ -465,6 +519,7 @@ final class HomeStore: ObservableObject {
             systems[index].brandModel = brandModel
             systems[index].installDate = installDate
             systems[index].lastServiceDate = lastServiceDate
+            systems[index].warrantyExpirationDate = warrantyExpirationDate
             systems[index].notes = notes
             systems[index].photoSymbol = category.symbol
         }
@@ -503,12 +558,34 @@ final class HomeStore: ObservableObject {
         tasks.append(task)
     }
 
+    func addDocument(
+        title: String,
+        type: VaultDocumentType,
+        notes: String,
+        systemID: UUID?,
+        taskID: UUID?
+    ) {
+        let doc = VaultDocument(
+            title: title,
+            type: type,
+            notes: notes,
+            systemID: systemID,
+            taskID: taskID
+        )
+        documents.append(doc)
+    }
+
+    func deleteDocument(_ documentID: UUID) {
+        documents.removeAll { $0.id == documentID }
+    }
+
     func deleteTask(_ task: MaintenanceTask) {
         completionDelayTasks[task.id]?.cancel()
         completionDelayTasks[task.id] = nil
 
         withAnimation(.easeInOut(duration: 0.22)) {
             pendingCompletionIDs.remove(task.id)
+            documents.removeAll { $0.taskID == task.id }
             tasks.removeAll { $0.id == task.id }
         }
     }
@@ -607,17 +684,20 @@ struct SeedPayload {
 private struct PersistedSnapshot: Codable {
     var systems: [HomeSystem]
     var tasks: [MaintenanceTask]
+    var documents: [VaultDocument]
     var impactEvents: [TaskImpactEvent]
     var healthHistory: [HealthTrendRecord]
 
     init(
         systems: [HomeSystem],
         tasks: [MaintenanceTask],
+        documents: [VaultDocument],
         impactEvents: [TaskImpactEvent],
         healthHistory: [HealthTrendRecord]
     ) {
         self.systems = systems
         self.tasks = tasks
+        self.documents = documents
         self.impactEvents = impactEvents
         self.healthHistory = healthHistory
     }
@@ -625,6 +705,7 @@ private struct PersistedSnapshot: Codable {
     private enum CodingKeys: String, CodingKey {
         case systems
         case tasks
+        case documents
         case impactEvents
         case healthHistory
     }
@@ -633,6 +714,7 @@ private struct PersistedSnapshot: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         systems = try container.decode([HomeSystem].self, forKey: .systems)
         tasks = try container.decode([MaintenanceTask].self, forKey: .tasks)
+        documents = try container.decodeIfPresent([VaultDocument].self, forKey: .documents) ?? []
         impactEvents = try container.decodeIfPresent([TaskImpactEvent].self, forKey: .impactEvents) ?? []
         healthHistory = try container.decodeIfPresent([HealthTrendRecord].self, forKey: .healthHistory) ?? []
     }
@@ -642,9 +724,9 @@ enum SampleDataFactory {
     static func seed(now: Date = .now) -> SeedPayload {
         let cal = Calendar.current
 
-        let downstairsHVAC = HomeSystem(name: "Downstairs HVAC", category: .hvac, brandModel: "Trane XR16", installDate: cal.date(byAdding: .year, value: -4, to: now), lastServiceDate: cal.date(byAdding: .day, value: -70, to: now), notes: "2-inch media filter. Allergy season setting.", photoSymbol: "wind")
-        let upstairsHVAC = HomeSystem(name: "Upstairs HVAC", category: .hvac, brandModel: "Lennox EL16", installDate: cal.date(byAdding: .year, value: -7, to: now), lastServiceDate: cal.date(byAdding: .day, value: -95, to: now), notes: "Thermostat offset +1F for comfort.", photoSymbol: "wind")
-        let fridgeFilter = HomeSystem(name: "Kitchen Refrigerator", category: .kitchen, brandModel: "GE Profile PVD28", installDate: cal.date(byAdding: .year, value: -3, to: now), lastServiceDate: cal.date(byAdding: .day, value: -165, to: now), notes: "Track filter part RPWFE.", photoSymbol: "refrigerator")
+        let downstairsHVAC = HomeSystem(name: "Downstairs HVAC", category: .hvac, brandModel: "Trane XR16", installDate: cal.date(byAdding: .year, value: -4, to: now), lastServiceDate: cal.date(byAdding: .day, value: -70, to: now), notes: "2-inch media filter. Allergy season setting.", warrantyExpirationDate: cal.date(byAdding: .day, value: 28, to: now), photoSymbol: "wind")
+        let upstairsHVAC = HomeSystem(name: "Upstairs HVAC", category: .hvac, brandModel: "Lennox EL16", installDate: cal.date(byAdding: .year, value: -7, to: now), lastServiceDate: cal.date(byAdding: .day, value: -95, to: now), notes: "Thermostat offset +1F for comfort.", warrantyExpirationDate: cal.date(byAdding: .day, value: -12, to: now), photoSymbol: "wind")
+        let fridgeFilter = HomeSystem(name: "Kitchen Refrigerator", category: .kitchen, brandModel: "GE Profile PVD28", installDate: cal.date(byAdding: .year, value: -3, to: now), lastServiceDate: cal.date(byAdding: .day, value: -165, to: now), notes: "Track filter part RPWFE.", warrantyExpirationDate: cal.date(byAdding: .day, value: 40, to: now), photoSymbol: "refrigerator")
         let dryer = HomeSystem(name: "Dryer", category: .laundry, brandModel: "LG DLEX4000", installDate: cal.date(byAdding: .year, value: -5, to: now), lastServiceDate: cal.date(byAdding: .day, value: -380, to: now), notes: "Exterior vent run is longer than average.", photoSymbol: "washer")
         let dishwasher = HomeSystem(name: "Dishwasher", category: .kitchen, brandModel: "Bosch 800 Series", installDate: cal.date(byAdding: .year, value: -2, to: now), lastServiceDate: cal.date(byAdding: .day, value: -120, to: now), notes: "Use monthly cleaner tab reminder.", photoSymbol: "fork.knife")
         let waterHeater = HomeSystem(name: "Water Heater", category: .water, brandModel: "AO Smith 50 Gal", installDate: cal.date(byAdding: .year, value: -9, to: now), lastServiceDate: cal.date(byAdding: .day, value: -210, to: now), notes: "Garage closet installation.", photoSymbol: "drop")

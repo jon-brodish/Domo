@@ -74,6 +74,36 @@ struct DashboardView: View {
                     }
                 }
 
+                SectionTitle(title: "Warranty Watch", subtitle: "Expiring soon across your systems")
+                SurfaceCard {
+                    if store.warrantyExpiringSoon.isEmpty && store.warrantyExpired.isEmpty {
+                        Text("No warranty expirations soon.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(store.warrantyExpired.prefix(3)) { system in
+                            HStack {
+                                Text(system.name)
+                                Spacer()
+                                Text("Expired")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.red)
+                            }
+                            .padding(.vertical, 4)
+                        }
+
+                        ForEach(store.warrantyExpiringSoon.prefix(4)) { system in
+                            HStack {
+                                Text(system.name)
+                                Spacer()
+                                Text(system.warrantyExpirationDate?.formatted(date: .abbreviated, time: .omitted) ?? "")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+
                 SectionTitle(title: "Systems", subtitle: "Health across major home categories")
                 LazyVStack(spacing: 12) {
                     ForEach(store.systems.prefix(6)) { system in

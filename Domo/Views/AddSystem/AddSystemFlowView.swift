@@ -22,6 +22,8 @@ struct AddSystemFlowView: View {
     @State private var category: HomeSystemCategory?
     @State private var installDate = Date()
     @State private var usesInstallDate = true
+    @State private var usesWarrantyDate = false
+    @State private var warrantyDate = Date()
     @State private var notes = ""
 
     @State private var aiHint = ""
@@ -170,6 +172,23 @@ struct AddSystemFlowView: View {
                     .toggleStyle(.switch)
                 if usesInstallDate {
                     DatePicker("Install Date", selection: $installDate, displayedComponents: .date)
+                        .datePickerStyle(.compact)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.primary.opacity(0.05))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                        )
+                }
+
+                Toggle("Known warranty expiration", isOn: $usesWarrantyDate)
+                    .toggleStyle(.switch)
+                if usesWarrantyDate {
+                    DatePicker("Warranty Expires", selection: $warrantyDate, displayedComponents: .date)
                         .datePickerStyle(.compact)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
@@ -473,6 +492,7 @@ struct AddSystemFlowView: View {
                 installDate: usesInstallDate ? installDate : nil,
                 lastServiceDate: nil,
                 notes: notes,
+                warrantyExpirationDate: usesWarrantyDate ? warrantyDate : nil,
                 photoSymbol: category.symbol,
                 createdFromAI: false
             )
