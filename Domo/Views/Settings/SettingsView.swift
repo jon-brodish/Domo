@@ -17,6 +17,8 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
         .navigationTitle("Settings")
     }
 }

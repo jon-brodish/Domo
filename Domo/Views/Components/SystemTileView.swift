@@ -12,11 +12,12 @@ struct SystemTileView: View {
                     .font(.title2)
                     .foregroundStyle(.primary)
                     .frame(width: 42, height: 42)
-                    .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(system.name)
                         .font(.headline)
+                        .foregroundStyle(.primary)
                     Text(system.brandModel)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)

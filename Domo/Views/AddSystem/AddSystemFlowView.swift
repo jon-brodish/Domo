@@ -92,10 +92,26 @@ struct AddSystemFlowView: View {
     }
 
     private var modeSelector: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             modeOption(for: .ai)
             modeOption(for: .manual)
         }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.66), Color.white.opacity(0.38)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.72), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 4)
     }
 
     private func modeOption(for flowMode: AddFlowMode) -> some View {
@@ -108,27 +124,34 @@ struct AddSystemFlowView: View {
                 mode = flowMode
             }
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 8) {
                     Image(systemName: symbol)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(isSelected ? .white : .primary)
                     Text(flowMode.rawValue)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.subheadline.weight(.bold))
                 }
                 Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(isSelected ? Color.primary.opacity(0.85) : .secondary)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(isSelected ? Color.white.opacity(0.88) : .secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isSelected ? Color.blue.opacity(0.14) : Color.primary.opacity(0.05))
+                    .fill(
+                        isSelected
+                        ? LinearGradient(colors: [Color.blue, Color.cyan], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        : LinearGradient(colors: [Color.white.opacity(0.55), Color.white.opacity(0.3)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(isSelected ? Color.blue.opacity(0.5) : Color.white.opacity(0.45), lineWidth: 1)
+                    .stroke(isSelected ? Color.white.opacity(0.45) : Color.white.opacity(0.7), lineWidth: 1)
             )
+            .shadow(color: isSelected ? Color.blue.opacity(0.22) : .clear, radius: 10, x: 0, y: 6)
         }
         .buttonStyle(.plain)
     }
@@ -154,18 +177,10 @@ struct AddSystemFlowView: View {
                     .pickerStyle(.menu)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.primary.opacity(0.05))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.white.opacity(0.45), lineWidth: 1)
-                    )
+                    .modifier(GlassFieldStyle())
                 }
 
-                Divider()
-                    .overlay(Color.primary.opacity(0.08))
+                sectionDivider
 
                 sectionLabel("Lifecycle")
                 Toggle("Known install date", isOn: $usesInstallDate)
@@ -175,14 +190,7 @@ struct AddSystemFlowView: View {
                         .datePickerStyle(.compact)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.primary.opacity(0.05))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.white.opacity(0.45), lineWidth: 1)
-                        )
+                        .modifier(GlassFieldStyle())
                 }
 
                 Toggle("Known warranty expiration", isOn: $usesWarrantyDate)
@@ -192,14 +200,7 @@ struct AddSystemFlowView: View {
                         .datePickerStyle(.compact)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.primary.opacity(0.05))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.white.opacity(0.45), lineWidth: 1)
-                        )
+                        .modifier(GlassFieldStyle())
                 }
 
                 sectionLabel("Notes")
@@ -207,14 +208,7 @@ struct AddSystemFlowView: View {
                     .lineLimit(3...5)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.primary.opacity(0.05))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.white.opacity(0.45), lineWidth: 1)
-                    )
+                    .modifier(GlassFieldStyle())
             }
         }
     }
@@ -244,7 +238,22 @@ struct AddSystemFlowView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 11)
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.white)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.blue, Color.cyan],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                        )
                         #endif
 
                         PhotosPicker(selection: $selectedItem, matching: .images) {
@@ -253,7 +262,22 @@ struct AddSystemFlowView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 11)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.primary)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.76), Color.white.opacity(0.48)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.white.opacity(0.82), lineWidth: 1)
+                        )
                     }
 
                     if selectedItem != nil || photoData != nil {
@@ -280,14 +304,7 @@ struct AddSystemFlowView: View {
                     TextField("Optional hint (e.g. HVAC in attic)", text: $aiHint)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.primary.opacity(0.05))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.white.opacity(0.45), lineWidth: 1)
-                        )
+                        .modifier(GlassFieldStyle())
 
                     Button {
                         Task { await runAI() }
@@ -295,15 +312,31 @@ struct AddSystemFlowView: View {
                         HStack {
                             if isAnalyzing {
                                 ProgressView()
+                                    .tint(.white)
                             } else {
                                 Label("Analyze with AI", systemImage: "sparkles")
                                     .font(.headline.weight(.semibold))
                             }
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                        .padding(.vertical, 12)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.white)
+                    .background(
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.indigo, Color.blue],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                    )
                     .disabled(isAnalyzing || (selectedItem == nil && photoData == nil))
                 }
             }
@@ -338,39 +371,33 @@ struct AddSystemFlowView: View {
                             .pickerStyle(.menu)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.primary.opacity(0.05))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Color.white.opacity(0.45), lineWidth: 1)
-                            )
+                            .modifier(GlassFieldStyle())
                         }
 
                         inputField("Model", text: suggestionModelBinding)
 
-                        Divider()
+                        sectionDivider
                         Text("Review suggested tasks")
                             .font(.subheadline.weight(.medium))
 
                         ForEach(suggestion.tasks) { task in
-                            HStack {
-                                Toggle(isOn: Binding(
-                                    get: { enabledSuggestions.contains(task.id) },
-                                    set: { isOn in
-                                        if isOn { enabledSuggestions.insert(task.id) }
-                                        else { enabledSuggestions.remove(task.id) }
-                                    }
-                                )) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(task.title)
-                                        Text(task.recurrence.summary)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
+                            Toggle(isOn: Binding(
+                                get: { enabledSuggestions.contains(task.id) },
+                                set: { isOn in
+                                    if isOn { enabledSuggestions.insert(task.id) }
+                                    else { enabledSuggestions.remove(task.id) }
+                                }
+                            )) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(task.title)
+                                    Text(task.recurrence.summary)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
                             }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .modifier(GlassFieldStyle())
                         }
                     }
                 }
@@ -383,16 +410,27 @@ struct AddSystemFlowView: View {
             Text("\(number)")
                 .font(.caption2.weight(.bold))
                 .frame(width: 16, height: 16)
-                .background(Circle().fill(Color.blue.opacity(0.18)))
+                .foregroundStyle(.blue)
+                .background(Circle().fill(Color.blue.opacity(0.14)))
             Text(title)
                 .font(.caption.weight(.semibold))
         }
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .foregroundStyle(Color.primary.opacity(0.86))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(
             Capsule(style: .continuous)
-                .fill(Color.primary.opacity(0.05))
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.7), Color.white.opacity(0.4)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(Color.white.opacity(0.75), lineWidth: 1)
         )
     }
 
@@ -405,14 +443,7 @@ struct AddSystemFlowView: View {
             TextField(title, text: text)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.primary.opacity(0.05))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.white.opacity(0.45), lineWidth: 1)
-                )
+                .modifier(GlassFieldStyle())
         }
     }
 
@@ -422,6 +453,12 @@ struct AddSystemFlowView: View {
             .foregroundStyle(.secondary)
             .textCase(.uppercase)
             .tracking(0.6)
+    }
+
+    private var sectionDivider: some View {
+        Divider()
+            .overlay(Color.primary.opacity(0.09))
+            .padding(.vertical, 4)
     }
 
     private var suggestionNameBinding: Binding<String> {
@@ -529,6 +566,26 @@ struct AddSystemFlowView: View {
         }
 
         isPresented = false
+    }
+}
+
+private struct GlassFieldStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.7), Color.white.opacity(0.42)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.white.opacity(0.8), lineWidth: 1)
+            )
     }
 }
 

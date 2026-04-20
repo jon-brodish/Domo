@@ -18,6 +18,7 @@ struct InsightsView: View {
                             _ = store.rescheduleAllOverdue(days: 3)
                         }
                         .font(.subheadline.weight(.semibold))
+                        .buttonStyle(GlassPillButtonStyle())
                     }
                 }
                 .padding(.vertical, 4)
@@ -74,12 +75,14 @@ struct InsightsView: View {
                                 } onSelect: {
                                     selectedTask = task
                                 }
+                                .listRowBackground(Color.clear)
 
                                 HStack(spacing: 14) {
                                     Button("Snooze 3 days") {
                                         store.snoozeTask(task.id, days: 3)
                                     }
                                     .font(.caption.weight(.semibold))
+                                    .buttonStyle(GlassPillButtonStyle())
 
                                     if task.dueDate < .now {
                                         Text("Overdue")
@@ -102,6 +105,9 @@ struct InsightsView: View {
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
         .sheet(item: $selectedTask) { task in
             TaskDetailSheetView(task: task)
                 .environmentObject(store)

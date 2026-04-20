@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DashboardView: View {
     @EnvironmentObject private var store: HomeStore
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showingAddSystem = false
     @State private var showingAddTask = false
     @State private var trendPeriod: TrendPeriod = .days30
@@ -11,11 +12,7 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 18) {
                 hero
 
-                HStack(spacing: 12) {
-                    InsightBadge(title: "Due Soon", value: "\(store.dueSoonTasks.count)", symbol: "clock")
-                    InsightBadge(title: "Overdue", value: "\(store.overdueTasks.count)", symbol: "exclamationmark.triangle")
-                    InsightBadge(title: "Completed", value: "\(store.recentlyCompleted.count)", symbol: "checkmark")
-                }
+                metricsOverview
 
                 SectionTitle(title: "Home Health Trend", subtitle: "Real data over the last 30 or 90 days")
                 SurfaceCard {
@@ -63,7 +60,7 @@ struct DashboardView: View {
                         Button("Reschedule all overdue +3 days") {
                             _ = store.rescheduleAllOverdue(days: 3)
                         }
-                        .font(.subheadline.weight(.medium))
+                        .buttonStyle(GlassPillButtonStyle())
                         .padding(.bottom, 4)
 
                         ForEach(store.overdueTasks.prefix(4)) { task in
@@ -135,6 +132,17 @@ struct DashboardView: View {
                     }
                 } label: {
                     Image(systemName: "plus")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 34, height: 34)
+                        .background(
+                            Circle()
+                                .fill(Color.white.opacity(0.46))
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(0.62), lineWidth: 1)
+                        )
                 }
             }
         }
@@ -145,6 +153,26 @@ struct DashboardView: View {
         .sheet(isPresented: $showingAddTask) {
             TaskEditorSheetView(isPresented: $showingAddTask)
                 .environmentObject(store)
+        }
+    }
+
+    @ViewBuilder
+    private var metricsOverview: some View {
+        if horizontalSizeClass == .compact {
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 12),
+                GridItem(.flexible(), spacing: 12)
+            ], spacing: 12) {
+                InsightBadge(title: "Due Soon", value: "\(store.dueSoonTasks.count)", symbol: "clock")
+                InsightBadge(title: "Overdue", value: "\(store.overdueTasks.count)", symbol: "exclamationmark.triangle")
+                InsightBadge(title: "Completed", value: "\(store.recentlyCompleted.count)", symbol: "checkmark")
+            }
+        } else {
+            HStack(spacing: 12) {
+                InsightBadge(title: "Due Soon", value: "\(store.dueSoonTasks.count)", symbol: "clock")
+                InsightBadge(title: "Overdue", value: "\(store.overdueTasks.count)", symbol: "exclamationmark.triangle")
+                InsightBadge(title: "Completed", value: "\(store.recentlyCompleted.count)", symbol: "checkmark")
+            }
         }
     }
 

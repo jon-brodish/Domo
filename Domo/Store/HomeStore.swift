@@ -41,14 +41,16 @@ final class HomeStore: ObservableObject {
             tasks = snapshot.tasks
             documents = snapshot.documents
             impactEvents = snapshot.impactEvents
-            healthHistory = snapshot.healthHistory
+            healthHistory = snapshot.healthHistory.isEmpty
+                ? SampleDataFactory.seededHealthTrendHistory(now: .now)
+                : snapshot.healthHistory
         } else {
             let seed = SampleDataFactory.seed()
             systems = seed.systems
             tasks = seed.tasks
             documents = []
             impactEvents = []
-            healthHistory = []
+            healthHistory = seed.healthHistory
         }
 
         observePersistence()
@@ -679,6 +681,7 @@ final class HomeStore: ObservableObject {
 struct SeedPayload {
     var systems: [HomeSystem]
     var tasks: [MaintenanceTask]
+    var healthHistory: [HealthTrendRecord]
 }
 
 private struct PersistedSnapshot: Codable {
@@ -747,6 +750,45 @@ enum SampleDataFactory {
             MaintenanceTask(title: "Run dishwasher cleaner cycle", dueDate: cal.date(byAdding: .day, value: -6, to: now) ?? now, recurrence: .every(days: 30), systemID: dishwasher.id, priority: .low, isCompleted: true, completedDate: cal.date(byAdding: .day, value: -6, to: now), origin: .userCreated)
         ]
 
-        return SeedPayload(systems: systems, tasks: tasks)
+        return SeedPayload(
+            systems: systems,
+            tasks: tasks,
+            healthHistory: seededHealthTrendHistory(now: now)
+        )
+    }
+
+    static func seededHealthTrendHistory(now: Date = .now) -> [HealthTrendRecord] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now)
+
+        let baselineScore = 68
+        let totalDays = 90
+
+        return (0..<totalDays).compactMap { offset in
+            guard let date = calendar.date(byAdding: .day, value: -(totalDays - 1 - offset), to: today) else {
+                return nil
+            }
+
+            let momentum = (offset * 18) / max(totalDays - 1, 1)
+            let wave = Int((sin(Double(offset) / 5.5) * 4.5).rounded())
+            let stressDip: Int
+            switch offset {
+            case 22...28, 53...58:
+                stressDip = 6
+            case 70...73:
+                stressDip = 3
+            default:
+                stressDip = 0
+            }
+
+            let score = max(40, min(95, baselineScore + momentum + wave - stressDip))
+            let overdue = max(0, min(6, 5 - (offset / 20) + (stressDip > 0 ? 1 : 0)))
+
+            return HealthTrendRecord(
+                date: date,
+                score: score,
+                overdueCount: overdue
+            )
+        }
     }
 }

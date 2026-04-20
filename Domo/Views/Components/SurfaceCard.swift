@@ -11,13 +11,29 @@ struct SurfaceCard<Content: View>: View {
         content
             .padding(18)
             .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(.ultraThinMaterial)
+                    .overlay(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.28), Color.white.opacity(0.10)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    )
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.64), Color.white.opacity(0.10)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
             )
-            .shadow(color: AppTheme.shadow, radius: 10, x: 0, y: 4)
+            .shadow(color: Color.black.opacity(0.18), radius: 18, x: 0, y: 10)
+            .shadow(color: Color.white.opacity(0.16), radius: 1, x: 0, y: 1)
     }
 }

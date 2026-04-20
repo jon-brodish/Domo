@@ -25,6 +25,7 @@ struct TasksView: View {
                             } onSelect: {
                                 selectedTask = task
                             }
+                            .listRowBackground(Color.clear)
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(role: .destructive) {
                                     pendingDeleteTask = task
@@ -47,7 +48,9 @@ struct TasksView: View {
                 }
             }
         }
-        .listStyle(.automatic)
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
         .navigationTitle("Tasks")
         .toolbar {
             if !store.overdueTasks.isEmpty {
@@ -55,6 +58,7 @@ struct TasksView: View {
                     Button("Reschedule Overdue") {
                         _ = store.rescheduleAllOverdue(days: 3)
                     }
+                    .buttonStyle(GlassPillButtonStyle())
                 }
             }
             ToolbarItem(placement: .primaryAction) {
@@ -63,6 +67,7 @@ struct TasksView: View {
                 } label: {
                     Label("New Task", systemImage: "plus")
                 }
+                .buttonStyle(GlassPillButtonStyle())
             }
         }
         .sheet(isPresented: $showingAddTask) {

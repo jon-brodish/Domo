@@ -5,13 +5,14 @@ struct SectionTitle: View {
     var subtitle: String? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(title)
-                .font(.title3.weight(.semibold))
+                .font(.title3.weight(.bold))
+                .foregroundStyle(Color.primary.opacity(0.92))
             if let subtitle {
                 Text(subtitle)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondary)
             }
         }
     }

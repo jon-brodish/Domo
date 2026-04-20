@@ -37,6 +37,8 @@ struct SystemsListView: View {
             }
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
         .navigationTitle("Systems")
         .searchable(text: $query, prompt: "Find a system or appliance")
         .toolbar {
@@ -46,6 +48,7 @@ struct SystemsListView: View {
                 } label: {
                     Label("Add System", systemImage: "plus")
                 }
+                .buttonStyle(GlassPillButtonStyle())
             }
         }
         .sheet(isPresented: $showingAdd) {

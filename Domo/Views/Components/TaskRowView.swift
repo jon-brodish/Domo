@@ -29,6 +29,7 @@ struct TaskRowView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(task.title)
                             .font(.body.weight(.medium))
+                            .foregroundStyle(.primary)
                         if let systemName {
                             Text(systemName)
                                 .font(.caption)
@@ -57,7 +58,7 @@ struct TaskRowView: View {
         .padding(.horizontal, 4)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.green.opacity(isPendingCompletion ? 0.1 : 0))
+                .fill(Color.black.opacity(isPendingCompletion ? 0.08 : 0.03))
                 .animation(.easeInOut(duration: 0.25), value: isPendingCompletion)
         )
     }

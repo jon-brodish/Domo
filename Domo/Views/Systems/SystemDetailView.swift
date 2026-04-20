@@ -194,24 +194,18 @@ struct SystemDetailView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "plus")
                             .font(.caption.weight(.bold))
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(.primary)
                             .frame(width: 20, height: 20)
                             .background(
                                 Circle()
-                                    .fill(Color.blue.opacity(0.14))
+                                    .fill(Color.black.opacity(0.08))
                             )
                         Text("Add Task")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(.primary)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(Color(.secondarySystemBackground))
-                    )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(GlassPillButtonStyle())
             }
             SurfaceCard {
                 let systemTasks = store.tasks(for: displaySystem)
@@ -262,6 +256,7 @@ struct SystemDetailView: View {
                         Button("Add") {
                             showingAddDocument = true
                         }
+                        .buttonStyle(GlassPillButtonStyle())
                     }
 
                     let attachedDocs = store.documents(for: displaySystem.id)
@@ -297,7 +292,7 @@ struct SystemDetailView: View {
                             Text("Open AI Recommendations")
                         }
                     }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(AccentCapsuleButtonStyle(tint: .indigo))
                         .disabled(isLoadingAIRecommendations)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

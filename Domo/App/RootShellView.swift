@@ -39,29 +39,39 @@ struct RootShellView: View {
 
     var body: some View {
 #if os(macOS)
-        NavigationSplitView {
-            List(AppSection.allCases, selection: $selectedSection) { section in
-                Label(section.title, systemImage: section.symbol)
-                    .tag(section)
+        ZStack {
+            AmbientBackgroundView()
+            NavigationSplitView {
+                List(AppSection.allCases, selection: $selectedSection) { section in
+                    Label(section.title, systemImage: section.symbol)
+                        .tag(section)
+                }
+                .navigationTitle("Home")
+                .listStyle(.sidebar)
+            } detail: {
+                sectionView(for: selectedSection)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .navigationTitle("Home")
-            .listStyle(.sidebar)
-        } detail: {
-            sectionView(for: selectedSection)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(AppTheme.background)
         }
 #else
-        TabView {
-            ForEach(AppSection.allCases) { section in
-                NavigationStack {
-                    sectionView(for: section)
-                        .background(AppTheme.background)
-                }
-                .tabItem {
-                    Label(section.title, systemImage: section.symbol)
+        ZStack {
+            AmbientBackgroundView()
+
+            TabView {
+                ForEach(AppSection.allCases) { section in
+                    NavigationStack {
+                        sectionView(for: section)
+                            .toolbarBackground(.visible, for: .navigationBar)
+                            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+                    }
+                    .tabItem {
+                        Label(section.title, systemImage: section.symbol)
+                    }
                 }
             }
+            .toolbarBackground(.visible, for: .tabBar)
+            .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+            .tint(.primary)
         }
 #endif
     }
